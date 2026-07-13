@@ -148,6 +148,29 @@ const inferProfessionProfile = (extractedData, rawText) => {
   ].join(' ');
   const haystack = normalizeText(combinedText);
 
+  const explicitMatches = [
+    { regex: /\b(mechanical engineer|mechanical engineering|mechanical design engineer|production engineer|quality engineer)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'mechanical') },
+    { regex: /\b(civil engineer|civil engineering|site engineer|structural engineer|project engineer)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'civil') },
+    { regex: /\b(electrical engineer|electrical engineering|automation engineer|control engineer|maintenance engineer)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'electrical') },
+    { regex: /\b(marketing executive|digital marketing|seo specialist|brand manager|marketing manager)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'marketing') },
+    { regex: /\b(hr executive|human resources|talent acquisition|recruitment specialist|hr operations)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'hr') },
+    { regex: /\b(accountant|finance executive|financial analyst|audit associate|finance manager)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'finance') },
+    { regex: /\b(teacher|teaching|curriculum developer|academic coordinator|trainer)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'teacher') },
+    { regex: /\b(lawyer|attorney|legal associate|litigation associate|corporate counsel)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'legal') },
+    { regex: /\b(doctor|physician|nurse|clinical specialist|healthcare administrator|medical administrator)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'healthcare') },
+    { regex: /\b(sales executive|business development|account manager|inside sales|sales manager)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'sales') },
+    { regex: /\b(graphic designer|ui\/ux designer|brand designer|visual designer|design lead)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'design') },
+    { regex: /\b(software engineer|developer|programmer|full stack|backend developer|frontend developer|data engineer)\b/i, profile: PROFESSION_PROFILES.find((item) => item.id === 'software') },
+  ];
+
+  const explicitProfile = explicitMatches.find((entry) => entry.regex.test(haystack) && entry.profile)?.profile;
+  if (explicitProfile) {
+    return {
+      ...explicitProfile,
+      careerLevel: inferCareerLevel(extractedData, rawText),
+    };
+  }
+
   let bestProfile = null;
   let bestScore = 0;
 
