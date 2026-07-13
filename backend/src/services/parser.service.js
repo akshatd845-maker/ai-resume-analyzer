@@ -76,7 +76,13 @@ const extractTextFromPDF = async (filePath) => {
     const dataBuffer = fs.readFileSync(filePath);
     const parser = new PDFParse({ data: dataBuffer });
     const pdfData = await parser.getText();
-    return pdfData.text;
+    const text = pdfData.text || '';
+    console.info('[PDF_PARSER]', JSON.stringify({
+      filePath,
+      extractedTextLength: text.length,
+      extractedTextPreview: text.slice(0, 4000),
+    }));
+    return text;
   } finally {
     // Clean up temp file
     try {

@@ -231,7 +231,8 @@ Rules:
 3. Keep every insight grounded in the resume content. If something is missing, say so clearly.
 4. missingSkills must only include domain-relevant skills and tools for the detected profession.
 5. recommendedJobRoles must reflect the inferred profession and experience level.
-6. Return ONLY a single valid JSON object with no markdown, no commentary, and no extra text.
+6. Do not rely on canned examples, generic templates, or profession-agnostic filler.
+7. Return ONLY a single valid JSON object with no markdown, no commentary, and no extra text.
 
 Output schema:
 {
@@ -277,18 +278,21 @@ const generateMockAnalysis = (extractedData, rawText) => {
   const hasCerts = certifications.length > 0;
   const skillCount = skills.length;
   const profile = inferProfessionProfile(extractedData, rawText);
-
-  let atsScore = 100;
-  if (!hasExperience) atsScore -= 15;
-  atsScore -= 10;
-  if (skillCount < 5) atsScore -= 7;
-  atsScore -= 8;
-  if (!hasCerts) atsScore -= 5;
-  if (!hasProjects) atsScore -= 5;
-  atsScore = Math.max(30, Math.min(atsScore + skillCount * 2, 82));
-
+  const experienceSnippet = experience[0] ? experience[0].slice(0, 160) : '';
+  const projectSnippet = projects[0] ? projects[0].slice(0, 160) : '';
+  const educationSnippet = education[0] ? education[0].slice(0, 160) : '';
   const skillLabel = skills.slice(0, 4).join(', ') || 'core professional capabilities';
-  const experienceLabel = hasExperience ? `${experience.length} work experience ${experience.length === 1 ? 'entry' : 'entries'}` : 'no listed work experience';
+  const experienceLabel = hasExperience ? `${experience.length} experience ${experience.length === 1 ? 'entry' : 'entries'}` : 'no listed work experience';
+
+  const missingSkills = profile.missingSkills
+    .filter((item) => !skills.some((skill) => skill.toLowerCase().includes(item.toLowerCase().split(' ')[0].toLowerCase())))
+    .slice(0, 4)
+    .map((item) => ({
+      name: item,
+      reason: `${item} is relevant to ${profile.profession.toLowerCase()} hiring needs and would strengthen ATS alignment for this resume.`,
+    }));
+
+  const atsScore = Math.max(38, Math.min(86, 52 + (hasExperience ? 12 : 0) + (skillCount >= 5 ? 8 : 0) + (hasProjects ? 6 : 0) + (hasCerts ? 4 : 0) - (missingSkills.length > 2 ? 6 : 0)));
 
   return {
     atsScore,
@@ -303,53 +307,48 @@ const generateMockAnalysis = (extractedData, rawText) => {
       confidence: 'high',
     },
     industryFit: [profile.domain, profile.industry, profile.targetRoles[0]].filter(Boolean),
-    summary: `This resume presents a ${profile.careerLevel.toLowerCase()} ${profile.profession.toLowerCase()} candidate with expertise in ${skillLabel}. The document includes ${experienceLabel} and ${hasProjects ? `${projects.length} project${projects.length > 1 ? 's' : ''}` : 'limited project evidence'}. The strongest opportunity is to strengthen ${profile.profession.toLowerCase()}-specific ATS keywords and add quantified achievements so recruiters can quickly validate fit for ${profile.targetRoles[0].toLowerCase()}.`,
+    summary: `This resume presents a ${profile.careerLevel.toLowerCase()} ${profile.profession.toLowerCase()} candidate. The strongest evidence comes from ${skillCount > 0 ? `the listed skills ${skillLabel}` : 'the detailed professional background'} and ${hasExperience ? `the experience section (${experienceSnippet || 'documented roles'})` : 'the available educational and project context'}. The analysis stays grounded in the actual resume content and highlights the most relevant ${profile.profession.toLowerCase()} positioning opportunities.`,
     strengths: [
       {
-        title: 'Relevant Domain Skills',
-        description: `The resume includes ${skillCount} identified skills such as ${skillLabel}, which provides a strong base for ${profile.profession.toLowerCase()} roles.`,
+        title: skillCount > 0 ? 'Relevant Skills Present' : 'Professional Foundation',
+        description: skillCount > 0
+          ? `The resume surfaces ${skillCount} detected skills, including ${skillLabel}, which are useful for ${profile.profession.toLowerCase()} evaluation.`
+          : `The resume provides enough context to support ${profile.profession.toLowerCase()} positioning through education and background evidence.`,
       },
-      {
-        title: hasProjects ? 'Project Evidence Present' : 'Educational Foundation',
-        description: hasProjects
-          ? `The resume lists ${projects.length} project${projects.length > 1 ? 's' : ''}, giving recruiters tangible evidence of practical application.`
-          : 'The education section gives the resume a clear academic foundation for the target profession.',
-      },
-      {
-        title: 'Clear Professional Direction',
-        description: `The profile is clearly aligned to ${profile.profession} and can be tailored for ${profile.targetRoles.slice(0, 2).join(' or ')}.`,
-      },
+      ...(hasExperience ? [{
+        title: 'Experience Evidence',
+        description: `The resume includes ${experienceLabel} and references ${experienceSnippet || 'specific work history'} as concrete evidence of professional activity.`,
+      }] : []),
+      ...(hasProjects ? [{
+        title: 'Project Evidence',
+        description: `The project section adds practical depth with ${projectSnippet || 'specific deliverables and implementation details'}.`,
+      }] : []),
       ...(hasCerts ? [{
-        title: 'Credentials Add Credibility',
-        description: `The listed certifications support ATS relevance and reinforce the candidate's professional profile.`,
+        title: 'Credentials Added',
+        description: `Existing certifications support credibility for ${profile.profession.toLowerCase()} roles and strengthen the profile.`,
       }] : []),
     ].slice(0, 5),
     weaknesses: [
       {
-        title: 'No Quantified Results',
-        description: `The resume does not yet show enough measurable outcomes. Add numbers, percentages, or scope to experience bullets so recruiters can assess impact quickly.`,
+        title: 'Quantified Outcomes Are Limited',
+        description: rawText && /\b(%, million, thousand, increased, reduced, improved|\d+)\b/i.test(rawText)
+          ? 'The resume contains some measurable language, but most bullets would benefit from more explicit outcomes and scope.'
+          : 'The resume would be stronger with explicit metrics, scope, and impact statements tied to each role. ',
       },
-      {
-        title: 'ATS Keyword Gaps',
-        description: `The resume would benefit from adding ${profile.missingSkills.slice(0, 3).join(', ')} in the skills and experience sections to match ${profile.profession.toLowerCase()} job descriptions more closely.`,
-      },
-      {
-        title: 'Summary Needs Tailoring',
-        description: 'A targeted summary at the top of the page would make the resume more recruiter-friendly and improve ATS relevance for the detected profession.',
-      },
-      ...(skillCount < 8 ? [{
-        title: 'Skills Section Could Be Deeper',
-        description: `Only ${skillCount} skills are currently surfaced. A richer skills section with role-specific tools will improve both ATS matching and recruiter confidence.`,
+      ...(skillCount < 5 ? [{
+        title: 'Skills Coverage Is Thin',
+        description: `Only ${skillCount} skills are currently surfaced, so the profile would benefit from a more detailed ${profile.profession.toLowerCase()} skill set.`,
       }] : []),
+      {
+        title: 'Role-Specific Tailoring Is Needed',
+        description: `The content should be rewritten to speak directly to ${profile.targetRoles.slice(0, 2).join(' or ')} expectations instead of using a generic professional summary.`,
+      },
     ].slice(0, 5),
-    missingSkills: profile.missingSkills.slice(0, 6).map((item) => ({
-      name: item,
-      reason: `${item} is commonly expected in ${profile.profession.toLowerCase()} job descriptions and improves ATS keyword alignment.`,
-    })),
+    missingSkills,
     improvementSuggestions: [
       {
         section: 'Summary',
-        suggestion: `Add a concise summary that states the detected profession, career level, and top strengths such as ${skillLabel}.`,
+        suggestion: `Introduce a short summary that states the detected profession, career level, and the most relevant evidence from ${educationSnippet || skillLabel}.`,
         priority: 'high',
         estimatedImpact: 'High',
         difficulty: 'Easy',
@@ -357,45 +356,38 @@ const generateMockAnalysis = (extractedData, rawText) => {
       {
         section: hasExperience ? 'Experience' : 'Projects',
         suggestion: hasExperience
-          ? 'Rewrite experience bullets to include action verbs and measurable outcomes such as cost savings, productivity gains, quality improvements, or deliverables completed.'
-          : 'Expand the project section with problem, approach, tools used, and at least one measurable outcome.',
+          ? 'Expand each experience entry with outcomes, metrics, tools, and the scale of delivery so recruiters can evaluate impact quickly.'
+          : 'Add a stronger projects section with the problem solved, approach used, tools applied, and one measurable outcome.',
         priority: 'high',
         estimatedImpact: 'High',
         difficulty: 'Medium',
       },
       {
         section: 'Skills',
-        suggestion: `Organise the skills section around the detected profession and include tools like ${profile.missingSkills.slice(0, 3).join(', ')} where relevant.`,
+        suggestion: `Add role-relevant keywords for ${profile.profession.toLowerCase()} and include any missing capabilities such as ${missingSkills.slice(0, 2).map((item) => item.name).join(', ') || profile.missingSkills.slice(0, 2).join(', ')}.`,
         priority: 'medium',
         estimatedImpact: 'Medium',
-        difficulty: 'Easy',
-      },
-      {
-        section: 'Keywords',
-        suggestion: `Add role-specific keywords from ${profile.profession} job descriptions so the resume aligns better with ATS filters.`,
-        priority: 'medium',
-        estimatedImpact: 'High',
         difficulty: 'Easy',
       },
     ],
     recommendedJobRoles: profile.targetRoles.slice(0, 5),
     keywordOptimization: {
       wellUsed: skills.slice(0, 6),
-      shouldAdd: profile.missingSkills.slice(0, 6),
+      shouldAdd: missingSkills.map((item) => item.name),
     },
     sectionFeedback: {
-      contact: `Contact section ${extractedData.email ? `includes email (${extractedData.email})` : 'is missing an email address'}${extractedData.phone ? ` and phone number` : ', and is missing a phone number'}. Add a professional profile link if available to improve recruiter reach.`,
-      summary: `The resume is currently focused on ${skillLabel} rather than a profession-specific positioning statement. Add a short summary that highlights the detected profession, relevant experience, and one concrete strength.`,
+      contact: `Contact section ${extractedData.email ? `includes email (${extractedData.email})` : 'is missing an email address'}${extractedData.phone ? ` and phone number` : ', and is missing a phone number'}.`,
+      summary: `The resume currently references ${skillLabel || 'the available professional background'} rather than a fully tailored profession-specific overview.`,
       skills: skillCount > 0
-        ? `${skillCount} skills detected: ${skills.slice(0, 6).join(', ')}${skills.length > 6 ? ` and ${skills.length - 6} more` : ''}. Expand them into role-relevant terms to strengthen ATS match quality.`
+        ? `${skillCount} skills detected: ${skills.slice(0, 6).join(', ')}${skills.length > 6 ? ` and ${skills.length - 6} more` : ''}. Expand the list with profession-specific terms where relevant.`
         : 'No skills section detected. Add a dedicated skills section with profession-specific capabilities immediately.',
       experience: hasExperience
-        ? `${experience.length} experience ${experience.length === 1 ? 'entry' : 'entries'} detected. Each role should include a clear outcome and a measurable result wherever possible.`
+        ? `${experience.length} experience ${experience.length === 1 ? 'entry' : 'entries'} detected. Each entry should highlight impact, scope, and the tools used.`
         : 'No work experience is detected. Highlight projects, internships, volunteering, or freelance work to show practical relevance.',
       education: education.length > 0
-        ? `Education section detected: ${education[0]}. Confirm the degree name, institution, and graduation year are clearly stated.`
+        ? `Education section detected: ${educationSnippet || education[0]}. Keep the credential details clear and specific.`
         : 'No education section detected. Add academic qualifications and graduation details to support the profile.',
-      overall: `Resume scores approximately ${atsScore}/100 on ATS readiness. The strongest next step is to align the content with ${profile.profession.toLowerCase()}-specific keywords and add measurable outcomes.`,
+      overall: `Resume scores approximately ${atsScore}/100 on ATS readiness. The strongest next step is to align the document with ${profile.profession.toLowerCase()} expectations and add measurable results.`,
     },
     scoreBreakdown: {
       contactInfo: extractedData.email && extractedData.phone ? 55 : extractedData.email || extractedData.phone ? 35 : 10,
@@ -410,26 +402,16 @@ const generateMockAnalysis = (extractedData, rawText) => {
   };
 };
 
-const analyzeResume = async (extractedData, rawText) => {
-  const apiKey = process.env.AI_API_KEY;
-  const isMock = !apiKey || apiKey === 'your-openai-api-key';
-
-  if (isMock) {
-    console.log('Using mock AI analysis fallback (no API key configured)...');
-    return generateMockAnalysis(extractedData, rawText);
-  }
-
-  const client = createAIClient();
-  const model = process.env.AI_MODEL || 'gpt-4o-mini';
-
+const buildAnalysisPrompt = (extractedData, rawText) => {
   const resumeData = prepareResumeData(extractedData, rawText);
+  const profile = inferProfessionProfile(extractedData, rawText);
 
-  // Increase truncation limit — 6000 chars covers most full resumes without hitting token limits
-  const truncatedRawText = resumeData.rawText.length > 6000
-    ? resumeData.rawText.slice(0, 6000) + '\n[...truncated for length]'
+  const truncatedRawText = resumeData.rawText.length > 12000
+    ? `${resumeData.rawText.slice(0, 12000)}\n[...truncated for length]`
     : resumeData.rawText;
 
-  // Build a rich context block so the model has every parsing signal available
+  const wordCount = (truncatedRawText.match(/\b\w+\b/g) || []).length;
+
   const skillsBlock = resumeData.skills.length
     ? resumeData.skills.join(', ')
     : 'NONE DETECTED';
@@ -450,9 +432,15 @@ const analyzeResume = async (extractedData, rawText) => {
     ? resumeData.certifications.join(', ')
     : 'NONE DETECTED';
 
-  const wordCount = (truncatedRawText.match(/\b\w+\b/g) || []).length;
+  return `Perform a deep, honest ATS and recruiter analysis of the resume below. First identify the candidate's profession, industry, and career level from the resume text. Then tailor the analysis to that profession. Return ONLY valid JSON matching the schema in your instructions. No markdown, no preamble.
 
-  const userPrompt = `Perform a deep, honest ATS and recruiter analysis of the resume below. First identify the candidate's profession, industry, and career level from the resume text. Then tailor the analysis to that profession. Return ONLY valid JSON matching the schema in your instructions. No markdown, no preamble.
+════════════════════════════════════
+PROFESSION CONTEXT (derived from the resume)
+════════════════════════════════════
+Profession     : ${profile.profession}
+Industry       : ${profile.industry}
+Career Level   : ${profile.careerLevel}
+Target Roles   : ${profile.targetRoles.join(', ')}
 
 ════════════════════════════════════
 PARSED RESUME DATA (parsing aid)
@@ -496,6 +484,44 @@ ANALYSIS INSTRUCTIONS:
 10. Do NOT invent, hallucinate, or assume anything not present in the resume text.
 
 Return ONLY the JSON object.`;
+};
+
+const analyzeResume = async (extractedData, rawText) => {
+  const apiKey = process.env.AI_API_KEY;
+  const isMock = !apiKey || apiKey === 'your-openai-api-key';
+
+  if (isMock) {
+    console.log('Using mock AI analysis fallback (no API key configured)...');
+    const profile = inferProfessionProfile(extractedData, rawText);
+    const resumeData = prepareResumeData(extractedData, rawText);
+    console.info('[AI_ANALYSIS_DEBUG]', JSON.stringify({
+      rawTextLength: resumeData.rawText.length,
+      detectedProfession: profile.profession,
+      detectedIndustry: profile.industry,
+      detectedCareerLevel: profile.careerLevel,
+      detectedExperienceCount: resumeData.experience.length,
+      promptLength: buildAnalysisPrompt(extractedData, rawText).length,
+    }));
+    const mockResult = generateMockAnalysis(extractedData, rawText);
+    console.info('[AI_ANALYSIS_RESPONSE]', JSON.stringify(mockResult));
+    return mockResult;
+  }
+
+  const client = createAIClient();
+  const model = process.env.AI_MODEL || 'gpt-4o-mini';
+  const profile = inferProfessionProfile(extractedData, rawText);
+  const resumeData = prepareResumeData(extractedData, rawText);
+  const userPrompt = buildAnalysisPrompt(extractedData, rawText);
+
+  console.info('[AI_ANALYSIS_DEBUG]', JSON.stringify({
+    rawTextLength: resumeData.rawText.length,
+    detectedProfession: profile.profession,
+    detectedIndustry: profile.industry,
+    detectedCareerLevel: profile.careerLevel,
+    detectedExperienceCount: resumeData.experience.length,
+    promptLength: userPrompt.length,
+  }));
+  console.info('[AI_ANALYSIS_PROMPT]', userPrompt);
 
   try {
     const completion = await client.chat.completions.create({
@@ -514,9 +540,21 @@ Return ONLY the JSON object.`;
       throw ApiError.internal('Failed to get response from AI');
     }
 
+    console.info('[AI_ANALYSIS_RESPONSE]', aiResponse);
+
     const validatedAnalysis = validateAIResponse(aiResponse);
 
-    return validatedAnalysis;
+    return {
+      ...validatedAnalysis,
+      detectedProfile: {
+        profession: profile.profession,
+        industry: profile.industry,
+        careerLevel: profile.careerLevel,
+        experience: resumeData.experience.length ? `${resumeData.experience.length} role${resumeData.experience.length > 1 ? 's' : ''}` : 'No formal experience listed',
+        targetRoles: profile.targetRoles.slice(0, 4),
+        confidence: 'high',
+      },
+    };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -529,4 +567,5 @@ Return ONLY the JSON object.`;
 module.exports = {
   analyzeResume,
   createAIClient,
+  buildAnalysisPrompt,
 };
