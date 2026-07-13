@@ -26,7 +26,7 @@ const analyzeResumeById = async (userId, resumeId) => {
 
   // Analyze with AI
   try {
-    const aiAnalysis = await analyzeResume(analysis.extractedData);
+    const aiAnalysis = await analyzeResume(analysis.extractedData, analysis.rawText);
     const atsResults = atsService.generateATSAnalysis(analysis.extractedData, analysis.rawText);
 
     // Update the analysis document

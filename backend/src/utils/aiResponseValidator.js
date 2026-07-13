@@ -108,9 +108,26 @@ const validateAIResponse = (response) => {
         }
       : { contact: '', summary: '', skills: '', experience: '', education: '', overall: '' };
 
+    // yearsOfExperience (new field)
+    const yearsOfExperience = typeof parsed.yearsOfExperience === 'number' && parsed.yearsOfExperience >= 0
+      ? Math.round(parsed.yearsOfExperience)
+      : null;
+
+    // scoreBreakdown (new field)
+    const scoreBreakdownFields = ['contactInfo', 'summary', 'workExperience', 'skills', 'education', 'achievements', 'keywords', 'formatting'];
+    let scoreBreakdown = null;
+    if (parsed.scoreBreakdown && typeof parsed.scoreBreakdown === 'object') {
+      scoreBreakdown = {};
+      for (const field of scoreBreakdownFields) {
+        const val = parsed.scoreBreakdown[field];
+        scoreBreakdown[field] = typeof val === 'number' ? Math.round(Math.min(Math.max(val, 0), 100)) : 0;
+      }
+    }
+
     return {
       atsScore: Math.round(parsed.atsScore),
       careerLevel,
+      yearsOfExperience,
       industryFit,
       summary: parsed.summary.trim(),
       strengths: parsed.strengths.filter((s) => typeof s === 'string' && s.trim()),
@@ -120,6 +137,7 @@ const validateAIResponse = (response) => {
       recommendedJobRoles: parsed.recommendedJobRoles.filter((r) => typeof r === 'string' && r.trim()),
       keywordOptimization,
       sectionFeedback,
+      ...(scoreBreakdown && { scoreBreakdown }),
     };
   } catch (error) {
     if (error instanceof ApiError) {

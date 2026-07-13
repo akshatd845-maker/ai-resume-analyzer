@@ -142,22 +142,35 @@ const makeSkillRegex = (skill) => {
 const extractSkills = (text) => {
   const skillKeywords = [
     // Programming Languages
-    'javascript', 'python', 'java', 'c++', 'c#', 'ruby', 'go', 'rust', 'php', 'swift', 'kotlin', 'typescript',
-    // Web Technologies
-    'html', 'css', 'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'spring', 'asp.net',
+    'javascript', 'python', 'java', 'c++', 'c#', 'ruby', 'go', 'golang', 'rust', 'php',
+    'swift', 'kotlin', 'typescript', 'scala', 'r', 'matlab', 'perl', 'dart', 'elixir', 'haskell',
+    // Web Frontend
+    'html', 'css', 'react', 'angular', 'vue', 'next.js', 'nuxt', 'svelte', 'redux',
+    'webpack', 'vite', 'tailwind', 'bootstrap', 'sass', 'less', 'jquery', 'graphql',
+    // Web Backend
+    'node', 'express', 'django', 'flask', 'fastapi', 'spring', 'asp.net', 'laravel',
+    'rails', 'nestjs', 'hapi', 'koa', 'fiber',
     // Databases
     'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'oracle', 'firebase', 'dynamodb',
-    // Tools & Platforms
-    'git', 'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'jenkins', 'ci/cd', 'linux', 'unix',
+    'cassandra', 'elasticsearch', 'sqlite', 'mariadb', 'supabase', 'prisma', 'sequelize',
+    // Cloud & DevOps
+    'git', 'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'jenkins', 'ci/cd',
+    'linux', 'unix', 'terraform', 'ansible', 'nginx', 'apache', 'github actions',
+    'gitlab ci', 'circleci', 'vercel', 'netlify', 'heroku', 'cloudflare',
     // Data Science & ML
-    'machine learning', 'deep learning', 'tensorflow', 'pytorch', 'pandas', 'numpy', 'scikit-learn',
-    'data analysis', 'data science', 'artificial intelligence', 'ai',
+    'machine learning', 'deep learning', 'tensorflow', 'pytorch', 'keras',
+    'pandas', 'numpy', 'scikit-learn', 'data analysis', 'data science',
+    'artificial intelligence', 'nlp', 'computer vision', 'llm', 'openai',
+    'langchain', 'hugging face', 'spark', 'hadoop', 'airflow', 'dbt', 'tableau', 'power bi',
+    // Mobile
+    'react native', 'flutter', 'android', 'ios', 'xcode',
+    // Testing
+    'jest', 'mocha', 'cypress', 'selenium', 'pytest', 'junit', 'testing',
+    // Other Tools
+    'rest api', 'restful', 'websocket', 'grpc', 'microservices', 'kafka', 'rabbitmq',
+    'agile', 'scrum', 'jira', 'confluence', 'figma', 'photoshop', 'excel', 'powerpoint',
     // Soft Skills
     'leadership', 'communication', 'teamwork', 'problem-solving', 'analytical', 'project management',
-    // Frameworks
-    'bootstrap', 'tailwind', 'sass', 'less', 'graphql', 'rest api', 'restful',
-    // Others
-    'agile', 'scrum', 'jira', 'confluence', 'figma', 'photoshop', 'excel', 'powerpoint'
   ];
 
   const foundSkills = [];
@@ -179,34 +192,65 @@ const extractSkills = (text) => {
 };
 
 /**
- * Extract education from text
+ * Extract education from text — returns full education section blocks
  */
 const extractEducation = (text) => {
+  const lines = text.split('\n');
   const educationKeywords = [
-    'education', 'academic', 'degree', 'university', 'college', 'bachelor', 'master', 'phd',
-    'b.tech', 'b.e', 'm.tech', 'm.e', 'b.sc', 'm.sc', 'bsc', 'msc'
+    'education', 'academic background', 'academic qualifications', 'qualifications',
+    'degree', 'university', 'college', 'bachelor', 'master', 'phd', 'doctorate',
+    'b.tech', 'b.e', 'm.tech', 'm.e', 'b.sc', 'm.sc', 'bsc', 'msc', 'b.com', 'm.com',
+    'high school', 'secondary school', 'diploma', 'associate'
   ];
 
-  const lines = text.split('\n');
-  const educationEntries = [];
+  // Try to find the Education section block first
+  let sectionStart = -1;
+  const sectionEndKeywords = [
+    'experience', 'employment', 'work history', 'skills', 'projects',
+    'certifications', 'achievements', 'awards', 'publications', 'interests', 'references'
+  ];
 
   for (let i = 0; i < lines.length; i++) {
-    const lineLower = lines[i].toLowerCase();
-    if (educationKeywords.some(keyword => lineLower.includes(keyword))) {
-      // Get surrounding context (current line + next 2 lines)
-      const context = lines.slice(i, Math.min(i + 3, lines.length)).join(' ');
-      if (context.trim() && context.length > 10) {
-        educationEntries.push(context.trim());
-      }
+    const lineLower = lines[i].toLowerCase().trim();
+    if (/^education/i.test(lineLower) || lineLower === 'education') {
+      sectionStart = i + 1;
+      break;
     }
   }
 
-  // If no education found, try to find degree patterns
-  if (educationEntries.length === 0) {
-    const degreePattern = /(bachelor|master|phd|b\.tech|m\.tech|b\.e|m\.e|b\.sc|m\.sc|bsc|msc)/gi;
-    for (const line of lines) {
-      if (degreePattern.test(line)) {
-        educationEntries.push(line.trim());
+  if (sectionStart !== -1) {
+    // Collect up to 10 lines of the education section
+    const sectionLines = [];
+    for (let i = sectionStart; i < Math.min(sectionStart + 15, lines.length); i++) {
+      const lineLower = lines[i].toLowerCase().trim();
+      if (sectionEndKeywords.some(k => lineLower.startsWith(k)) && lines[i].trim().length < 30) break;
+      if (lines[i].trim()) sectionLines.push(lines[i].trim());
+    }
+    if (sectionLines.length > 0) {
+      // Group non-empty lines into logical entries (max 3 lines each)
+      const entries = [];
+      let current = [];
+      for (const line of sectionLines) {
+        if (current.length >= 3) {
+          entries.push(current.join(' '));
+          current = [];
+        }
+        current.push(line);
+      }
+      if (current.length) entries.push(current.join(' '));
+      return entries.slice(0, 5);
+    }
+  }
+
+  // Fallback: scan all lines for education-related content
+  const educationEntries = [];
+  for (let i = 0; i < lines.length; i++) {
+    const lineLower = lines[i].toLowerCase();
+    if (educationKeywords.some(keyword => lineLower.includes(keyword))) {
+      const context = lines.slice(i, Math.min(i + 3, lines.length))
+        .map(l => l.trim()).filter(Boolean).join(' ');
+      if (context.length > 10 && !educationEntries.includes(context)) {
+        educationEntries.push(context);
       }
     }
   }
@@ -215,28 +259,85 @@ const extractEducation = (text) => {
 };
 
 /**
- * Extract experience from text
+ * Extract experience from text — captures job title, company, dates, and bullet points
  */
 const extractExperience = (text) => {
-  const experienceKeywords = [
-    'experience', 'employment', 'work history', 'professional', 'career', 'job',
-    'company', 'inc', 'llc', 'ltd', 'corp', 'technologies', 'solutions', 'services'
+  const lines = text.split('\n');
+  const sectionEndKeywords = [
+    'education', 'skills', 'projects', 'certifications', 'achievements',
+    'awards', 'publications', 'interests', 'references', 'volunteer'
   ];
 
-  const lines = text.split('\n');
-  const experienceEntries = [];
+  // Try to find the Experience/Employment section
+  let sectionStart = -1;
+  const expSectionKeywords = [
+    'experience', 'employment history', 'work experience', 'work history',
+    'professional experience', 'career history'
+  ];
 
+  for (let i = 0; i < lines.length; i++) {
+    const lineLower = lines[i].toLowerCase().trim();
+    if (expSectionKeywords.some(k => lineLower === k || lineLower.startsWith(k + ' '))) {
+      sectionStart = i + 1;
+      break;
+    }
+  }
+
+  if (sectionStart !== -1) {
+    const sectionLines = [];
+    for (let i = sectionStart; i < Math.min(sectionStart + 40, lines.length); i++) {
+      const lineLower = lines[i].toLowerCase().trim();
+      if (sectionEndKeywords.some(k => lineLower === k || (lineLower.startsWith(k) && lines[i].trim().length < 30))) break;
+      sectionLines.push(lines[i].trim());
+    }
+
+    // Group lines into job entries. A new entry typically starts with a date pattern or a line
+    // that looks like a job title (non-empty, no leading bullet, not too long).
+    const entries = [];
+    let current = [];
+    const datePattern = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b.*\d{4}|\d{4}\s*[-–—]\s*(\d{4}|present|current)/i;
+
+    for (const line of sectionLines) {
+      if (!line) continue;
+      // New job entry likely starts when we hit a date line or after a blank
+      if (datePattern.test(line) && current.length > 0) {
+        entries.push(current.join(' '));
+        current = [line];
+      } else {
+        current.push(line);
+        // Cap each entry at 5 lines of context
+        if (current.length >= 5) {
+          entries.push(current.join(' '));
+          current = [];
+        }
+      }
+    }
+    if (current.length) entries.push(current.join(' '));
+
+    const filtered = entries.map(e => e.trim()).filter(e => e.length > 15);
+    if (filtered.length > 0) return filtered.slice(0, 6);
+  }
+
+  // Fallback: scan for company/role indicators
+  const experienceKeywords = [
+    'experience', 'employment', 'engineer', 'developer', 'analyst', 'manager',
+    'intern', 'associate', 'consultant', 'designer', 'architect',
+    'inc', 'llc', 'ltd', 'corp', 'technologies', 'solutions', 'services', 'pvt'
+  ];
+
+  const experienceEntries = [];
   for (let i = 0; i < lines.length; i++) {
     const lineLower = lines[i].toLowerCase();
     if (experienceKeywords.some(keyword => lineLower.includes(keyword))) {
-      const context = lines.slice(i, Math.min(i + 3, lines.length)).join(' ');
-      if (context.trim() && context.length > 15) {
-        experienceEntries.push(context.trim());
+      const context = lines.slice(i, Math.min(i + 4, lines.length))
+        .map(l => l.trim()).filter(Boolean).join(' ');
+      if (context.length > 15 && !experienceEntries.includes(context)) {
+        experienceEntries.push(context);
       }
     }
   }
 
-  return experienceEntries.slice(0, 5);
+  return experienceEntries.slice(0, 6);
 };
 
 /**

@@ -6,14 +6,14 @@ module.exports = {
   weights: {
     contact: 5,
     summary: 10,
-    skills: 20,
-    education: 15,
-    experience: 20,
-    projects: 10,
+    skills: 18,
+    education: 12,
+    experience: 25,
+    projects: 8,
     certifications: 5,
-    keywords: 8,
-    achievements: 4,
-    formatting: 3,
+    keywords: 10,
+    achievements: 5,
+    formatting: 2,
   },
 
   // Scoring thresholds for contact info
@@ -94,16 +94,23 @@ module.exports = {
 
   // Important keywords to look for
   importantKeywords: [
-    // Technical skills
-    'javascript', 'python', 'java', 'c++', 'c#', 'ruby', 'go', 'rust', 'php', 'typescript',
-    'react', 'angular', 'vue', 'node', 'express', 'django', 'flask', 'spring', 'html', 'css',
-    'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'firebase', 'oracle',
-    'docker', 'kubernetes', 'aws', 'azure', 'gcp', 'jenkins', 'git', 'linux',
-    'machine learning', 'data science', 'artificial intelligence', 'tensorflow', 'pytorch',
-    'agile', 'scrum', 'jira', 'rest api', 'graphql',
-    // Soft skills
+    // Programming Languages
+    'javascript', 'python', 'java', 'typescript', 'c++', 'c#', 'ruby', 'go', 'rust', 'php', 'swift', 'kotlin', 'scala',
+    // Frontend
+    'react', 'angular', 'vue', 'next.js', 'svelte', 'html', 'css', 'tailwind', 'bootstrap', 'redux',
+    // Backend
+    'node', 'express', 'django', 'flask', 'fastapi', 'spring', 'nestjs', 'rest api', 'graphql', 'microservices',
+    // Databases
+    'sql', 'mysql', 'postgresql', 'mongodb', 'redis', 'firebase', 'dynamodb', 'elasticsearch',
+    // Cloud & DevOps
+    'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'terraform', 'ci/cd', 'jenkins', 'github actions', 'linux',
+    // Data Science / ML
+    'machine learning', 'deep learning', 'tensorflow', 'pytorch', 'pandas', 'numpy', 'scikit-learn', 'data science',
+    'artificial intelligence', 'nlp', 'llm',
+    // Tools
+    'git', 'agile', 'scrum', 'jira', 'figma', 'kafka',
+    // Soft Skills / Action verbs
     'leadership', 'communication', 'teamwork', 'problem solving', 'analytical',
-    // Action verbs
     'developed', 'implemented', 'designed', 'created', 'managed', 'led', 'optimized',
     'analyzed', 'improved', 'built', 'delivered', 'reduced', 'increased', 'achieved',
   ],

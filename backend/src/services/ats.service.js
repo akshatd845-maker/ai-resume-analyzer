@@ -19,14 +19,14 @@ const {
 const WEIGHTS = {
   contact: 5,
   summary: 10,
-  skills: 20,
-  education: 15,
-  experience: 20,
-  projects: 10,
+  skills: 18,
+  education: 12,
+  experience: 25,
+  projects: 8,
   certifications: 5,
-  keywords: 8,
-  achievements: 4,
-  formatting: 3,
+  keywords: 10,
+  achievements: 5,
+  formatting: 2,
 };
 
 /**

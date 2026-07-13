@@ -43,10 +43,25 @@ const sectionFeedbackSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const scoreBreakdownSchema = new mongoose.Schema(
+  {
+    contactInfo: { type: Number, default: 0 },
+    summary: { type: Number, default: 0 },
+    workExperience: { type: Number, default: 0 },
+    skills: { type: Number, default: 0 },
+    education: { type: Number, default: 0 },
+    achievements: { type: Number, default: 0 },
+    keywords: { type: Number, default: 0 },
+    formatting: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const aiAnalysisSchema = new mongoose.Schema(
   {
     atsScore: { type: Number, default: 0 },
     careerLevel: { type: String, default: '' },
+    yearsOfExperience: { type: Number, default: null },
     industryFit: [{ type: String }],
     summary: { type: String, default: '' },
     strengths: [{ type: String }],
@@ -56,6 +71,7 @@ const aiAnalysisSchema = new mongoose.Schema(
     recommendedJobRoles: [{ type: String }],
     keywordOptimization: { type: keywordOptimizationSchema, default: {} },
     sectionFeedback: { type: sectionFeedbackSchema, default: {} },
+    scoreBreakdown: { type: scoreBreakdownSchema, default: null },
   },
   { _id: false }
 );
