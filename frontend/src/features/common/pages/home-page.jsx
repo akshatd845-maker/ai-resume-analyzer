@@ -1,21 +1,24 @@
-import { useMemo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowRight,
-  Check,
+  BarChart3,
+  Bookmark,
+  Briefcase,
   ChevronDown,
-  GitBranch,
-  Loader2,
+  FileText,
   Sparkles,
-  Star,
   Upload,
+  Zap,
 } from 'lucide-react'
 
+import { useAuth } from '@/app/providers/auth-provider'
+import { cn } from '@/lib/utils'
 
-
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+/* ═══════════════════════════════════════════════════════════════
+   PRIMITIVES
+═══════════════════════════════════════════════════════════════ */
 
 function useAnchorScroll() {
   return (id) => {
@@ -25,711 +28,898 @@ function useAnchorScroll() {
   }
 }
 
-function SectionHeader({ eyebrow, title, description }) {
+/* ATS Score circular progress ring */
+function AtsRing({ score }) {
+  const size = 88
+  const strokeWidth = 11
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const gradientId = 'atsGreenGrad'
+
   return (
-    <div className="mx-auto max-w-2xl text-center">
-      {eyebrow ? (
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/50 px-3 py-1 text-small text-muted">
-          <Sparkles className="size-4" />
-          <span>{eyebrow}</span>
-        </div>
+    <div className="relative mt-1.5 flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ transform: 'rotate(-90deg)' }}
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#22C55E" />
+            <stop offset="100%" stopColor="#16A34A" />
+          </linearGradient>
+        </defs>
+        {/* Track */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={strokeWidth}
+        />
+        {/* Progress arc */}
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={`url(#${gradientId})`}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: circumference * (1 - score / 100) }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          style={{ filter: 'drop-shadow(0 0 6px rgba(34,197,94,0.45))' }}
+        />
+      </svg>
+      {/* Center text */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[22px] font-bold leading-none text-white">{score}</span>
+        <span className="text-[10px] text-text-secondary">/100</span>
+      </div>
+    </div>
+  )
+}
+
+/* Fade-up on viewport enter */
+function FadeUp({ children, delay = 0, className }) {
+  const reduced = useReducedMotion()
+  return (
+    <motion.div
+      initial={reduced ? false : { opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-60px 0px' }}
+      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+/* Section wrapper */
+const Section = memo(function Section({ id, children, className }) {
+  return (
+    <section
+      id={id}
+      className={cn('relative mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8', className)}
+    >
+      {children}
+    </section>
+  )
+})
+
+/* Section heading block */
+function SectionLabel({ label, title, description, center = true }) {
+  return (
+    <div className={cn('max-w-2xl', center && 'mx-auto text-center')}>
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-violet-400">
+        <Sparkles className="size-3" aria-hidden="true" />
+        {label}
+      </span>
+      <h2 className="mt-4 text-[28px] font-bold leading-tight tracking-tight text-white sm:text-[34px]">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-3 text-[15px] leading-relaxed text-text-secondary">{description}</p>
       ) : null}
-      <h2 className="text-h2 mt-2">{title}</h2>
-      {description ? <p className="text-body mt-3 text-muted">{description}</p> : null}
     </div>
   )
 }
 
-function LogoMark() {
+/* ═══════════════════════════════════════════════════════════════
+   NAVBAR
+═══════════════════════════════════════════════════════════════ */
+
+const NAV_LINKS = [
+  { label: 'Features', id: 'features' },
+  { label: 'How It Works', id: 'how-it-works' },
+  { label: 'FAQ', id: 'faq' },
+]
+
+function Navbar({ activeSection, onScroll, onLogin }) {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 16)
+    window.addEventListener('scroll', handler, { passive: true })
+    return () => window.removeEventListener('scroll', handler)
+  }, [])
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative size-9 rounded-xl border border-border/60 bg-gradient-to-b from-primary/15 to-transparent p-[2px]">
-        <div className="absolute inset-0 rounded-xl bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/30 via-transparent to-transparent opacity-80" />
-        <div className="relative flex h-full w-full items-center justify-center">
-          <div className="size-4 rounded-md bg-primary/90 shadow-elevation-sm" />
+    <header
+      className={cn(
+        'fixed inset-x-0 top-0 z-50 transition-all duration-300',
+        scrolled
+          ? 'border-b border-border bg-background/95 shadow-[0_1px_16px_rgba(0,0,0,0.4)] backdrop-blur-xl'
+          : 'border-b border-transparent bg-transparent backdrop-blur-sm',
+      )}
+    >
+      <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <a
+          href="#top"
+          onClick={(e) => { e.preventDefault(); onScroll('top') }}
+          className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+          aria-label="AI Resume Analyzer home"
+        >
+          <div className="flex size-8 items-center justify-center rounded-[10px] bg-primary shadow-[0_0_14px_rgba(124,58,237,0.5)]">
+            <Sparkles className="size-4 text-white" aria-hidden="true" />
+          </div>
+          <div className="leading-tight">
+            <p className="text-[13px] font-semibold text-white">AI Resume Analyzer</p>
+            <p className="text-[10px] text-text-secondary tracking-wider">Analyzer V2</p>
+          </div>
+        </a>
+
+        {/* Center nav */}
+        <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
+          {NAV_LINKS.map((item) => {
+            const isActive = activeSection === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onScroll(item.id)}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-text-secondary hover:bg-white/[0.05] hover:text-white',
+                )}
+              >
+                {item.label}
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* Right */}
+        <button
+          type="button"
+          onClick={onLogin}
+          className="rounded-[10px] border border-border bg-card px-4 py-1.5 text-[13px] font-semibold text-white transition-all duration-150 hover:border-primary/40 hover:bg-primary/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          Sign In
+        </button>
+      </div>
+    </header>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HERO — DASHBOARD PREVIEW CARD
+═══════════════════════════════════════════════════════════════ */
+
+const PROGRESS_BARS = [
+  { label: 'Content', value: 88, color: 'bg-primary' },
+  { label: 'Formatting', value: 76, color: 'bg-blue-500' },
+  { label: 'Skills', value: 92, color: 'bg-success' },
+  { label: 'Experience', value: 70, color: 'bg-warning' },
+]
+
+function DashboardPreview() {
+  const reduced = useReducedMotion()
+
+  return (
+    <motion.div
+      animate={reduced ? {} : { y: [0, -10, 0] }}
+      transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+      className="relative w-full"
+    >
+      {/* Glow backdrop */}
+      <div
+        className="pointer-events-none absolute -inset-6 rounded-[36px] blur-3xl"
+        style={{ background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.20) 0%, transparent 70%)' }}
+        aria-hidden="true"
+      />
+
+      <div className="relative rounded-[24px] border border-border bg-card p-7 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+        {/* Bottom bar / control simulation */}
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="size-2 rounded-full bg-destructive" />
+            <div className="size-2 rounded-full bg-warning" />
+            <div className="size-2 rounded-full bg-success" />
+          </div>
+          <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold text-accent">
+            Live Analysis
+          </span>
+        </div>
+
+        {/* Score row */}
+        <div className="grid grid-cols-3 gap-4">
+          {/* ATS Score */}
+          <div className="col-span-1 flex flex-col items-center justify-center rounded-[16px] border border-border bg-background py-6">
+            <p className="text-[10px] font-medium text-text-secondary">ATS Score</p>
+            <AtsRing score={92} />
+            <span className="mt-2.5 rounded-full bg-success/10 px-2 py-0.5 text-[9px] font-semibold text-success">
+              Excellent
+            </span>
+          </div>
+
+          {/* Right mini stats */}
+          <div className="col-span-2 grid grid-rows-2 gap-4">
+            <div className="rounded-[16px] border border-border bg-background px-5 py-4">
+              <p className="text-[10px] text-text-secondary">Keyword Match</p>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-accent"
+                    initial={{ width: 0 }}
+                    animate={{ width: '85%' }}
+                    transition={{ duration: 1.2, ease: 'easeOut', delay: 0.4 }}
+                  />
+                </div>
+                <span className="text-[12px] font-bold text-accent">85%</span>
+              </div>
+            </div>
+            <div className="rounded-[16px] border border-border bg-background px-5 py-4">
+              <p className="text-[10px] text-text-secondary">AI Suggestions</p>
+              <p className="mt-1 text-[24px] font-bold leading-none text-white">24</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Resume report card */}
+        <div className="mt-5 rounded-[16px] border border-border bg-background p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <FileText className="size-3.5 text-accent" aria-hidden="true" />
+            <p className="text-[11px] font-semibold text-white/90">Resume Preview</p>
+            <span className="ml-auto rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-accent">
+              Report
+            </span>
+          </div>
+          <div className="space-y-3.5">
+            {PROGRESS_BARS.map((bar) => (
+              <div key={bar.label} className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-text-secondary">{bar.label}</span>
+                  <span className="font-medium text-white">{bar.value}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                  <motion.div
+                    className={cn('h-full rounded-full', bar.color)}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${bar.value}%` }}
+                    transition={{ duration: 1, ease: 'easeOut', delay: 0.5 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="leading-tight">
-        <div className="text-body font-semibold tracking-tight">ResumeAI</div>
-        <div className="text-caption text-muted">Analyzer V2</div>
+    </motion.div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════════════════════════ */
+
+function HeroSection({ onCTA, onDemo }) {
+  const reduced = useReducedMotion()
+
+  return (
+    <Section id="top" className="pt-28 pb-20 sm:pt-36 sm:pb-28">
+      {/* Ambient background */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute left-1/4 top-0 h-[500px] w-[600px] -translate-x-1/2 rounded-full bg-violet-500/8 blur-[120px]" />
+        <div className="absolute right-1/4 top-32 h-64 w-64 rounded-full bg-violet-400/5 blur-[80px]" />
+        {/* Animated subtle gradient orb */}
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.06, 0.1, 0.06] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 top-16 h-[600px] w-[600px] -translate-x-1/2 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(124,58,237,1) 0%, transparent 70%)' }}
+        />
+      </div>
+
+      <div className="grid items-center gap-12 lg:grid-cols-[5fr_7fr] lg:gap-12">
+        {/* Left */}
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Badge */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/8 px-3 py-1 text-[11px] font-semibold text-violet-400">
+            <Sparkles className="size-3" aria-hidden="true" />
+            ✨ AI-Powered Resume Analysis
+          </span>
+
+          {/* Heading */}
+          <h1 className="mt-5 text-[40px] font-extrabold leading-[1.1] tracking-tight text-white sm:text-[52px]">
+            Turn Your Resume Into{' '}
+            <span
+              className="bg-clip-text text-transparent"
+              style={{ backgroundImage: 'linear-gradient(135deg, #A855F7 0%, #8B5CF6 60%, #6D28D9 100%)' }}
+            >
+              An ATS&#8209;Winning
+            </span>{' '}
+            Story.
+          </h1>
+
+          {/* Subheading */}
+          <p className="mt-5 max-w-md text-[16px] leading-relaxed text-text-secondary">
+            Upload your resume once. Receive ATS score, AI suggestions, and job
+            matching insights within seconds.
+          </p>
+
+          {/* CTAs */}
+          <div className="mt-8 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={onCTA}
+              className="group inline-flex h-11 items-center gap-2 rounded-[12px] bg-primary px-6 text-[14px] font-semibold text-white shadow-[0_4px_20px_rgba(139,92,246,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_8px_28px_rgba(139,92,246,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Analyze your resume"
+            >
+              Analyze My Resume
+              <ArrowRight className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={onDemo}
+              className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-border bg-card px-6 text-[14px] font-medium text-white transition-all duration-200 hover:border-border-hover hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              View Demo
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Right — dashboard preview */}
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full"
+        >
+          <DashboardPreview />
+        </motion.div>
+      </div>
+    </Section>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TAGLINE STRIP
+═══════════════════════════════════════════════════════════════ */
+
+function TaglineStrip() {
+  return (
+    <div className="border-y border-border bg-background/80 py-8">
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:justify-center sm:gap-8">
+          {[
+            '⚡ Instant ATS scoring',
+            '🎯 AI-powered suggestions',
+            '🔒 Secure & private',
+            '🚀 Job matching built-in',
+          ].map((item) => (
+            <span key={item} className="text-[13px] font-medium text-text-secondary">
+              {item}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
-function PricingPlaceholder() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card className="overflow-hidden p-6 shadow-elevation-md">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="rounded-full">
-                Coming soon
-              </Badge>
-              <Star className="size-4 text-muted" />
-            </div>
-            <h3 className="text-h3 mt-2">Starter</h3>
-            <p className="text-body mt-2 text-muted">
-              For personal projects and first-time optimization.
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-display">—</div>
-            <div className="text-caption text-muted">per month</div>
-          </div>
-        </div>
-        <ul className="mt-5 grid gap-3 text-small text-muted">
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            ATS scan + score
-          </li>
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            AI resume suggestions
-          </li>
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            Job match insights
-          </li>
-        </ul>
-      </Card>
+/* ═══════════════════════════════════════════════════════════════
+   FEATURES
+═══════════════════════════════════════════════════════════════ */
 
-      <Card className="overflow-hidden p-6 shadow-elevation-md border-primary/20">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Badge className="rounded-full">Most popular</Badge>
-            </div>
-            <h3 className="text-h3 mt-2">Pro</h3>
-            <p className="text-body mt-2 text-muted">
-              More matches, deeper scoring signals, faster iteration.
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-display">—</div>
-            <div className="text-caption text-muted">per month</div>
-          </div>
-        </div>
-        <ul className="mt-5 grid gap-3 text-small text-muted">
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            Priority analysis
-          </li>
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            Resume scoring trends
-          </li>
-          <li className="flex items-center gap-2">
-            <Check className="size-4 text-success" />
-            Job matching for multiple roles
-          </li>
-        </ul>
-      </Card>
-    </div>
+const FEATURES = [
+  {
+    id: 'ats',
+    icon: BarChart3,
+    title: 'ATS Optimization',
+    description:
+      'Detect missing keywords, formatting risks, and ATS-unfriendly patterns before your application reaches a recruiter.',
+    color: 'text-accent',
+    bg: 'bg-primary/10',
+    glow: 'hover:shadow-[0_8px_32px_rgba(139,92,246,0.15)]',
+  },
+  {
+    id: 'ai',
+    icon: Sparkles,
+    title: 'AI Suggestions',
+    description:
+      'Receive targeted bullet rewrites, tone improvements, and role-specific clarity suggestions powered by AI.',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10',
+    glow: 'hover:shadow-[0_8px_32px_rgba(59,130,246,0.12)]',
+  },
+  {
+    id: 'keyword',
+    icon: Zap,
+    title: 'Keyword Matching',
+    description:
+      'See exactly which keywords your resume is missing and how to add them naturally without sounding robotic.',
+    color: 'text-warning',
+    bg: 'bg-warning/10',
+    glow: 'hover:shadow-[0_8px_32px_rgba(245,158,11,0.10)]',
+  },
+  {
+    id: 'report',
+    icon: Bookmark,
+    title: 'Detailed Reports',
+    description:
+      'Get a full breakdown of your resume score with actionable next steps categorized by priority.',
+    color: 'text-success',
+    bg: 'bg-success/10',
+    glow: 'hover:shadow-[0_8px_32px_rgba(34,197,94,0.10)]',
+  },
+]
+
+function FeaturesSection() {
+  return (
+    <Section id="features" className="py-24">
+      <FadeUp>
+        <SectionLabel
+          label="Features"
+          title="Everything you need to improve your resume"
+          description="AI-powered optimization designed for modern hiring."
+        />
+      </FadeUp>
+
+      <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {FEATURES.map((f, i) => {
+          const Icon = f.icon
+          return (
+            <FadeUp key={f.id} delay={i * 0.07}>
+              <div
+                className={cn(
+                  'group h-full rounded-[20px] border border-border bg-card p-6',
+                  'transition-all duration-300 hover:-translate-y-1.5 hover:border-[rgba(255,255,255,0.14)]',
+                  f.glow,
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-flex size-10 items-center justify-center rounded-[12px] transition-transform duration-200 group-hover:scale-110',
+                    f.bg,
+                  )}
+                >
+                  <Icon className={cn('size-5', f.color)} aria-hidden="true" />
+                </span>
+                <h3 className="mt-4 text-[15px] font-semibold text-white">{f.title}</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">{f.description}</p>
+              </div>
+            </FadeUp>
+          )
+        })}
+      </div>
+    </Section>
   )
 }
 
-function FAQItem({ q, a, open, onToggle }) {
+/* ═══════════════════════════════════════════════════════════════
+   HOW IT WORKS
+═══════════════════════════════════════════════════════════════ */
+
+const STEPS = [
+  { n: '01', icon: Upload, title: 'Upload Resume', description: 'Drop your PDF and let the parser extract your content instantly.' },
+  { n: '02', icon: Sparkles, title: 'AI Analysis', description: 'Our AI scans for keyword gaps, clarity issues, and role alignment signals.' },
+  { n: '03', icon: BarChart3, title: 'Receive Suggestions', description: 'Get a full ATS score plus prioritized, actionable improvement steps.' },
+  { n: '04', icon: Briefcase, title: 'Apply With Confidence', description: 'Match your resume to target roles and apply knowing you stand out.' },
+]
+
+function HowItWorksSection() {
   return (
-    <div className="rounded-xl border border-border/70 bg-card/60">
+    <Section id="how-it-works" className="py-24">
+      {/* Subtle border-top */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.08)] to-transparent" aria-hidden="true" />
+
+      <FadeUp>
+        <SectionLabel
+          label="How It Works"
+          title="From upload to interview-ready in minutes"
+          description="A clean four-step pipeline designed for speed."
+        />
+      </FadeUp>
+
+      <div className="relative mt-16 grid gap-6 lg:grid-cols-4">
+        {/* Animated connector line (desktop) */}
+        <div className="pointer-events-none absolute left-0 right-0 top-10 hidden h-px overflow-hidden lg:block" aria-hidden="true">
+          <motion.div
+            className="h-full"
+            style={{
+              background: 'linear-gradient(90deg, transparent 0%, rgba(124,58,237,0.4) 20%, rgba(168,85,247,0.6) 50%, rgba(124,58,237,0.4) 80%, transparent 100%)',
+            }}
+            initial={{ scaleX: 0, originX: 0 }}
+            whileInView={{ scaleX: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+          />
+        </div>
+
+        {STEPS.map((s, i) => {
+          const Icon = s.icon
+          return (
+            <FadeUp key={s.n} delay={i * 0.1}>
+              <div className="relative flex flex-col gap-4">
+                {/* Mobile vertical connector */}
+                {i < STEPS.length - 1 ? (
+                  <div className="absolute left-5 top-full h-6 w-px bg-gradient-to-b from-primary/40 to-transparent lg:hidden" aria-hidden="true" />
+                ) : null}
+
+                <div className="rounded-[20px] border border-border bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[0_8px_32px_rgba(139,92,246,0.12)]">
+                  {/* Step number */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-accent">
+                      Step {s.n}
+                    </span>
+                    <span className="inline-flex size-9 items-center justify-center rounded-[10px] bg-primary/10">
+                      <Icon className="size-4 text-accent" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <h3 className="text-[15px] font-semibold text-white">{s.title}</h3>
+                  <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">{s.description}</p>
+                </div>
+              </div>
+            </FadeUp>
+          )
+        })}
+      </div>
+    </Section>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FAQ
+═══════════════════════════════════════════════════════════════ */
+
+const FAQ_ITEMS = [
+  {
+    id: 'f1',
+    q: 'How secure is my resume?',
+    a: 'Your resume is processed securely and never shared with third parties. Files are encrypted in transit and at rest. You can delete your uploaded files at any time from your profile settings.',
+  },
+  {
+    id: 'f2',
+    q: 'Which file formats are supported?',
+    a: 'We support PDF uploads only. For the most accurate parsing, use a PDF exported from a standard word processor without embedded tables or complex graphics.',
+  },
+  {
+    id: 'f3',
+    q: 'How does the ATS scoring work?',
+    a: 'The ATS engine analyzes keyword coverage, formatting compatibility, and structural completeness against common applicant tracking system patterns. Scores reflect how well your resume is likely to parse and rank — not a guarantee of any specific outcome.',
+  },
+  {
+    id: 'f4',
+    q: 'What do the AI suggestions actually do?',
+    a: 'After parsing your resume, the AI identifies keyword gaps, clarity issues, and role alignment signals. It returns prioritized suggestions you can apply directly to your document.',
+  },
+  {
+    id: 'f5',
+    q: 'Can I upload multiple resumes?',
+    a: 'Yes. You can upload and manage multiple resume versions from your dashboard, track their ATS scores, and compare analysis results across files.',
+  },
+]
+
+function FaqItem({ item, open, onToggle }) {
+  return (
+    <div
+      className={cn(
+        'rounded-[16px] border transition-colors duration-200',
+        open ? 'border-primary/30 bg-primary/[0.04]' : 'border-border bg-card hover:border-border-hover',
+      )}
+    >
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
         aria-expanded={open}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-[16px]"
       >
-        <span className="text-body font-medium">{q}</span>
+        <span className="text-[14px] font-medium text-white">{item.q}</span>
         <ChevronDown
-          className={
-            'size-5 shrink-0 transition-transform ' + (open ? 'rotate-180' : 'rotate-0')
-          }
-        />
+          className={cn(
+            'size-4 shrink-0 text-text-secondary transition-transform duration-200',
+            open && 'rotate-180',
+          )}
+          aria-hidden="true"
+        >
+        </ChevronDown>
       </button>
       <motion.div
         initial={false}
         animate={{ height: open ? 'auto' : 0, opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.22, ease: 'easeInOut' }}
         className="overflow-hidden"
       >
-        <div className="px-5 pb-4 text-small text-muted">{a}</div>
+        <p className="px-5 pb-4 text-[13px] leading-relaxed text-text-secondary">{item.a}</p>
       </motion.div>
     </div>
   )
 }
 
-export function HomePage() {
-  const scrollTo = useAnchorScroll()
-  const reducedMotion = useReducedMotion()
-  const [openFAQ, setOpenFAQ] = useState('faq-1')
-
-  const navbarItems = useMemo(
-    () => [
-      { label: 'Home', id: 'top' },
-      { label: 'Features', id: 'features' },
-      { label: 'Pricing', id: 'pricing', placeholder: true },
-    ],
-    [],
-  )
-
-  const trustedFeatures = useMemo(
-    () => [
-      {
-        title: 'ATS Analysis',
-        description: 'Detect missing keywords, formatting risks, and ATS-unfriendly structure.',
-        icon: Upload,
-      },
-      {
-        title: 'AI Suggestions',
-        description: 'Rewrite bullets to be clearer, stronger, and more role-aligned.',
-        icon: Sparkles,
-      },
-      {
-        title: 'Resume Scoring',
-        description: 'A transparent score that highlights what to improve next.',
-        icon: Star,
-      },
-      {
-        title: 'Job Matching',
-        description: 'See how well your resume matches the job you care about.',
-        icon: Check,
-      },
-      {
-        title: 'Fast Analysis',
-        description: 'From upload to ATS score in seconds—ready for iteration.',
-        icon: Loader2,
-      },
-    ],
-    [],
-  )
-
-  const whyChooseUs = useMemo(
-    () => [
-      {
-        title: 'Modern, premium UX',
-        description: 'Clean hierarchy, readable typography, and frictionless flows.',
-      },
-      {
-        title: 'Actionable insights',
-        description: 'Not just feedback—clear next steps you can apply immediately.',
-      },
-      {
-        title: 'Built for dark mode',
-        description: 'Legible contrast and polished surfaces across themes.',
-      },
-      {
-        title: 'Designed for speed',
-        description: 'Quick scans that help you move from resume to interviews faster.',
-      },
-    ],
-    [],
-  )
-
-  const faq = useMemo(
-    () => [
-      {
-        id: 'faq-1',
-        q: 'Is my resume uploaded to a server?',
-        a: 'This landing page does not implement any backend. In the full product, uploads are processed by the server according to privacy policies.',
-      },
-      {
-        id: 'faq-2',
-        q: 'Will this replace human resume review?',
-        a: 'No—think of it as an ATS-focused co-pilot. You get structured improvements plus guidance for making your resume stronger.',
-      },
-      {
-        id: 'faq-3',
-        q: 'Does it work for different job titles?',
-        a: 'Yes. The analysis is role-aware and focuses on keyword coverage, structure, and match signals.',
-      },
-      {
-        id: 'faq-4',
-        q: 'Is there a free tier?',
-        a: 'Start Free is a placeholder CTA on this landing page. Pricing details will be published during product launch.',
-      },
-    ],
-    [],
-  )
-
+function FaqSection() {
+  const [open, setOpen] = useState('f1')
   return (
-    <div id="top" className="min-h-screen bg-background text-foreground">
-      {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-2xl items-center justify-between px-4 sm:max-w-4xl sm:px-6 lg:max-w-6xl">
-          <a
-            href="#top"
-            onClick={(e) => {
-              e.preventDefault()
-              scrollTo('top')
-            }}
-            className="flex items-center gap-2"
-          >
-            <LogoMark />
-          </a>
-
-          <nav className="hidden items-center gap-1 md:flex">
-            {navbarItems.map((item) => (
-              <Button
-                key={item.id}
-                variant="ghost"
-                className="h-9 px-3 text-muted hover:text-foreground"
-                onClick={() => scrollTo(item.id)}
-              >
-                {item.label}
-                {item.placeholder ? (
-                  <span className="ml-2 text-caption text-muted">•</span>
-                ) : null}
-              </Button>
-            ))}
-          </nav>
-
-              <div className="flex items-center gap-2">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden text-muted hover:text-foreground md:block"
-              aria-label="GitHub"
-            >
-              <GitBranch className="size-5" />
-            </a>
-
-
-            <Button
-              variant="ghost"
-              className="hidden md:inline-flex"
-              onClick={() => {
-                // Placeholder for Login route
-                scrollTo('cta')
-              }}
-            >
-              Login
-            </Button>
-
-            <Button
-              className="hidden md:inline-flex"
-              onClick={() => scrollTo('cta')}
-            >
-              Get Started <ArrowRight className="size-4" />
-            </Button>
-
-            <Button
-              variant="outline"
-              className="md:hidden"
-              onClick={() => scrollTo('features')}
-              aria-label="Open navigation"
-            >
-              <span className="sr-only">Navigate</span>
-              <span className="text-body">Menu</span>
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <main>
-        <section className="relative overflow-hidden">
-          <div className="absolute inset-0 -z-10">
-            <div className="absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-            <div className="absolute top-36 right-0 h-72 w-72 rounded-full bg-success/10 blur-3xl" />
-          </div>
-
-          <div className="mx-auto max-w-2xl px-4 py-14 sm:max-w-4xl sm:px-6 sm:py-20 lg:max-w-6xl">
-            <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-              <motion.div
-                initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45 }}
-              >
-                <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/50 px-4 py-2 text-small text-muted">
-                  <Sparkles className="size-4" />
-                  ATS-ready resumes—without the guesswork
-                </div>
-
-                <h1 className="text-display mt-5">
-                  Turn your resume into an ATS-winning story.
-                </h1>
-
-                <p className="text-body mt-4 text-muted">
-                  Upload once. Get an ATS score, AI suggestions, and job matching signals in seconds.
-                  Built to help you iterate fast and apply with confidence.
-                </p>
-
-                <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Button className="h-11 px-5" onClick={() => scrollTo('cta')}>
-                    Upload Resume <ArrowRight className="size-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-11 px-5 border-border/70"
-                    onClick={() => scrollTo('how-it-works')}
-                  >
-                    How it works
-                  </Button>
-                </div>
-
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  {["ATS score", "AI suggestions", "Job matching"].map((t) => (
-                    <div key={t} className="rounded-xl border border-border/60 bg-card/40 px-4 py-3">
-                      <div className="text-small text-muted">{t}</div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={reducedMotion ? false : { opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.05 }}
-                className="lg:justify-self-end"
-              >
-                <Card className="relative overflow-hidden rounded-2xl border-border/70 bg-card/60 p-6 shadow-elevation-lg">
-                  <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge className="rounded-full">Live preview</Badge>
-                      <span className="text-caption text-muted">Illustration placeholder</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="size-2 rounded-full bg-success/80" />
-                      <div className="text-caption text-muted">Ready</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid gap-4">
-                    <div className="h-40 rounded-xl border border-border/60 bg-background/40 p-4">
-                      <div className="flex items-center gap-2">
-                        <div className="size-3 rounded-full bg-primary/70" />
-                        <div className="size-10 rounded-lg bg-primary/20" />
-                      </div>
-                      <div className="mt-4 grid grid-cols-12 gap-3">
-                        {Array.from({ length: 10 }).map((_, i) => (
-                          <div
-                            key={i}
-                            className={
-                              'col-span-12 h-3 rounded bg-muted/70 opacity-' +
-                              (i % 3 === 0 ? '80' : '60')
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-xl border border-border/60 bg-background/30 p-4">
-                        <div className="text-small text-muted">ATS score</div>
-                        <div className="text-h2 mt-2">92</div>
-                        <div className="text-caption text-muted mt-1">High match</div>
-                      </div>
-                      <div className="rounded-xl border border-border/60 bg-background/30 p-4">
-                        <div className="text-small text-muted">Top improvement</div>
-                        <div className="text-h3 mt-2">Keyword coverage</div>
-                        <div className="text-caption text-muted mt-1">Add 6 missing terms</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <motion.div
-                    initial={reducedMotion ? false : { opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, delay: 0.12 }}
-                    className="mt-6 flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 px-4 py-3"
-                  >
-                    <Upload className="size-5 text-primary" />
-                    <div>
-                      <div className="text-small text-muted">Next step</div>
-                      <div className="text-body font-medium">Upload your resume</div>
-                    </div>
-                  </motion.div>
-                </Card>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
-        {/* Trusted Features */}
-        <section id="features" className="border-t border-border/60">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-            <SectionHeader
-              eyebrow="Trusted by job seekers"
-              title="Everything you need to improve in one pass"
-              description="ATS analysis, AI suggestions, scoring, and job matching—designed for clarity and speed."
+    <Section id="faq" className="py-24">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.08)] to-transparent" aria-hidden="true" />
+      <FadeUp>
+        <SectionLabel
+          label="FAQ"
+          title="Common questions"
+          description="Everything you need to know before getting started."
+        />
+      </FadeUp>
+      <div className="mx-auto mt-10 max-w-2xl space-y-2">
+        {FAQ_ITEMS.map((item) => (
+          <FadeUp key={item.id} delay={0.05}>
+            <FaqItem
+              item={item}
+              open={open === item.id}
+              onToggle={() => setOpen((p) => (p === item.id ? '' : item.id))}
             />
-
-            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-5">
-              {trustedFeatures.map((f, idx) => {
-                const Icon = f.icon
-                return (
-                  <motion.div
-                    key={f.title}
-                    initial={reducedMotion ? false : { opacity: 0, y: 14 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-20% 0px' }}
-                    transition={{ duration: 0.45, delay: idx * 0.03 }}
-                    className="h-full"
-                  >
-                    <Card className="h-full rounded-2xl border-border/70 bg-card/50 p-6 shadow-elevation-md transition-transform hover:-translate-y-1 hover:shadow-elevation-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary/10">
-                            <Icon className="size-5 text-primary" />
-                          </span>
-                          <h3 className="text-h3">{f.title}</h3>
-                        </div>
-                      </div>
-                      <p className="text-body mt-3 text-muted">{f.description}</p>
-                    </Card>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* How it works */}
-        <section id="how-it-works" className="border-t border-border/60">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-            <SectionHeader
-              eyebrow="How it works"
-              title="A clean pipeline from upload to match"
-              description="Upload resume → AI analysis → ATS score → job matching."
-            />
-
-            <div className="mt-12 grid gap-6 lg:grid-cols-4 lg:items-start">
-              {[
-                {
-                  step: '01',
-                  title: 'Upload Resume',
-                  description: 'Drag & drop and let the system parse your content.',
-                  icon: Upload,
-                },
-                {
-                  step: '02',
-                  title: 'AI Analysis',
-                  description: 'Keyword signals, clarity improvements, and suggestions.',
-                  icon: Sparkles,
-                },
-                {
-                  step: '03',
-                  title: 'ATS Score',
-                  description: 'A transparent score that points to what matters most.',
-                  icon: Star,
-                },
-                {
-                  step: '04',
-                  title: 'Job Matching',
-                  description: 'See how your resume lines up with target roles.',
-                  icon: Check,
-                },
-              ].map((s, i) => {
-                const Icon = s.icon
-                return (
-                  <div key={s.step} className="relative">
-                    {i < 3 ? (
-                      <div className="hidden lg:block absolute -right-6 top-10">
-                        <div className="h-0 w-0 border-l-[14px] border-l-primary/20 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent" />
-                      </div>
-                    ) : null}
-                    <Card className="rounded-2xl border-border/70 bg-card/50 p-6 shadow-elevation-md">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="text-caption text-muted">Step {s.step}</div>
-                          <h3 className="text-h3 mt-2">{s.title}</h3>
-                        </div>
-                        <span className="inline-flex size-11 items-center justify-center rounded-2xl bg-primary/10">
-                          <Icon className="size-5 text-primary" />
-                        </span>
-                      </div>
-                      <p className="text-body mt-3 text-muted">{s.description}</p>
-                    </Card>
-                    {i === 0 ? (
-                      <div className="lg:hidden mt-4">
-                        <div className="flex items-center justify-center gap-3 text-muted">
-                          <span className="text-small">↓</span>
-                        </div>
-                      </div>
-                    ) : null}
-                    {i > 0 && i < 3 ? (
-                      <div className="lg:hidden mt-4">
-                        <div className="flex items-center justify-center gap-3 text-muted">
-                          <span className="text-small">↓</span>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* Why choose us */}
-        <section id="why" className="border-t border-border/60">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-            <SectionHeader
-              eyebrow="Why choose us"
-              title="Premium signals for a better job search"
-              description="Modern cards, subtle motion, and insights you can act on right away."
-            />
-
-            <div className="mt-10 grid gap-5 md:grid-cols-2">
-              {whyChooseUs.map((c, idx) => (
-                <motion.div
-                  key={c.title}
-                  initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-20% 0px' }}
-                  transition={{ duration: 0.45, delay: idx * 0.04 }}
-                  className="h-full"
-                >
-                  <Card className="h-full rounded-2xl border-border/70 bg-card/50 p-6 shadow-elevation-md transition-transform hover:-translate-y-1 hover:shadow-elevation-lg">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-h3">{c.title}</h3>
-                        <p className="text-body mt-3 text-muted">{c.description}</p>
-                      </div>
-                      <div className="hidden size-10 items-center justify-center rounded-2xl bg-primary/10 sm:flex" />
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Pricing (placeholder) */}
-        <section id="pricing" className="border-t border-border/60">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-            <SectionHeader
-              eyebrow="Pricing"
-              title="Simple plans. Premium results."
-              description="This is a placeholder pricing section for Phase 2."
-            />
-            <div className="mt-10">
-              <PricingPlaceholder />
-            </div>
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section id="faq" className="border-t border-border/60">
-          <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
-            <SectionHeader
-              eyebrow="FAQ"
-              title="Answers, without the fluff"
-              description="Quick questions about how this co-pilot works."
-            />
-
-            <div className="mt-10 grid gap-4">
-              {faq.map((item) => (
-                <FAQItem
-                  key={item.id}
-                  q={item.q}
-                  a={item.a}
-                  open={openFAQ === item.id}
-                  onToggle={() => setOpenFAQ((prev) => (prev === item.id ? '' : item.id))}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section id="cta" className="border-t border-border/60">
-          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
-            <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/60 p-8 shadow-elevation-lg sm:p-10">
-              <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />
-              <div className="grid items-center gap-8 lg:grid-cols-2">
-                <div>
-                  <h2 className="text-display">Start Free. Improve today.</h2>
-                  <p className="text-body mt-4 text-muted">
-                    Upload your resume and get an ATS score with AI suggestions—ready for your next application.
-                  </p>
-
-                  <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <Button className="h-11 px-6" onClick={() => scrollTo('top')}>
-                      Start Free <ArrowRight className="size-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-11 px-6 border-border/70"
-                      onClick={() => scrollTo('how-it-works')}
-                    >
-                      Upload Resume
-                    </Button>
-                  </div>
-
-                  <div className="mt-6 text-caption text-muted">
-                    No authentication or backend is used in this landing page build.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-border/70 bg-background/30 p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="text-small text-muted">Preview</div>
-                    <Badge className="rounded-full">Fast</Badge>
-                  </div>
-                  <div className="mt-4 grid gap-3">
-                    {[
-                      { label: 'ATS scan', value: 'Complete' },
-                      { label: 'Suggestions', value: 'Ready' },
-                      { label: 'Job match', value: 'Scored' },
-                    ].map((row) => (
-                      <div key={row.label} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/50 px-4 py-3">
-                        <div className="text-small text-muted">{row.label}</div>
-                        <div className="text-small font-medium">{row.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-5 flex items-center gap-3 rounded-xl bg-primary/10 px-4 py-3">
-                    <Check className="size-5 text-success" />
-                    <div>
-                      <div className="text-small text-muted">Result highlight</div>
-                      <div className="text-body font-medium">Highest leverage improvements</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-border/60">
-        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl border border-border/60 bg-card/50" />
-              <div>
-                <div className="text-body font-semibold">ResumeAI</div>
-                <div className="text-caption text-muted">Premium ATS analysis</div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-small text-muted">
-              <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-foreground">
-                GitHub
-              </a>
-              <a href="#" className="hover:text-foreground">
-                Documentation
-              </a>
-              <a href="#" className="hover:text-foreground">
-                Privacy
-              </a>
-              <a href="#" className="hover:text-foreground">
-                Terms
-              </a>
-              <a href="#" className="hover:text-foreground">
-                Contact
-              </a>
-            </div>
-          </div>
-
-          <div className="mt-8 text-caption text-muted">© {new Date().getFullYear()} ResumeAI. All rights reserved.</div>
-        </div>
-      </footer>
-    </div>
+          </FadeUp>
+        ))}
+      </div>
+    </Section>
   )
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   FINAL CTA
+═══════════════════════════════════════════════════════════════ */
+
+function CtaSection({ onLogin }) {
+  return (
+    <Section className="py-24">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(255,255,255,0.08)] to-transparent" aria-hidden="true" />
+      <FadeUp>
+        <div className="relative overflow-hidden rounded-[24px] border border-primary/20 bg-card px-8 py-16 text-center sm:px-16">
+          {/* Glow */}
+          <div
+            className="pointer-events-none absolute inset-0 -z-10"
+            style={{
+              background:
+                'radial-gradient(ellipse at 50% 0%, rgba(139,92,246,0.14) 0%, transparent 60%)',
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
+            style={{
+              background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.4), transparent)',
+            }}
+            aria-hidden="true"
+          />
+
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-accent">
+            <Sparkles className="size-3" aria-hidden="true" />
+            Get started free
+          </span>
+
+          <h2 className="mx-auto mt-5 max-w-2xl text-[32px] font-extrabold leading-tight tracking-tight text-white sm:text-[40px]">
+            Ready to build a resume that gets interviews?
+          </h2>
+
+          <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-text-secondary">
+            Create your account and start improving your resume with AI.
+          </p>
+
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={onLogin}
+              className="group inline-flex h-12 items-center gap-2 rounded-[12px] bg-primary px-8 text-[15px] font-semibold text-white shadow-[0_4px_20px_rgba(139,92,246,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_8px_32px_rgba(139,92,246,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Sign in to get started"
+            >
+              Sign In
+              <ArrowRight className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </FadeUp>
+    </Section>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════════════ */
+
+function Footer({ onScroll }) {
+  return (
+    <footer className="border-t border-border bg-background">
+      <div className="mx-auto max-w-[1200px] px-4 py-12 sm:px-6 lg:px-8">
+        {/* Brand + tagline */}
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-[10px] bg-primary shadow-[0_0_14px_rgba(124,58,237,0.4)]">
+              <Sparkles className="size-4 text-white" aria-hidden="true" />
+            </div>
+            <p className="text-[13px] font-semibold text-white">AI Resume Analyzer</p>
+          </div>
+          <p className="text-[13px] text-text-secondary">
+            AI-powered resume analysis platform.
+          </p>
+        </div>
+
+        {/* Links */}
+        <nav className="mt-8 flex flex-wrap items-center justify-center gap-x-8 gap-y-3" aria-label="Footer navigation">
+          <button
+            type="button"
+            onClick={() => onScroll('features')}
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            Features
+          </button>
+          <button
+            type="button"
+            onClick={() => onScroll('how-it-works')}
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            How It Works
+          </button>
+          <button
+            type="button"
+            onClick={() => onScroll('faq')}
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            FAQ
+          </button>
+          <a
+            href="/privacy"
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            Privacy Policy
+          </a>
+          <a
+            href="/terms"
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            Terms of Service
+          </a>
+          <a
+            href="/contact"
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            Contact
+          </a>
+          <a
+            href="https://github.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub"
+            className="text-[13px] text-text-secondary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          >
+            GitHub
+          </a>
+        </nav>
+
+        {/* Copyright */}
+        <div className="mt-8 border-t border-border pt-6 text-center">
+          <p className="text-[12px] text-text-secondary">
+            © {new Date().getFullYear()} AI Resume Analyzer. All rights reserved.
+          </p>
+        </div>
+      </div>
+    </footer>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROOT PAGE
+═══════════════════════════════════════════════════════════════ */
+
+export function HomePage() {
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
+  const scrollTo = useAnchorScroll()
+
+  const [activeSection, setActiveSection] = useState('top')
+
+  // Intersection observer — track active nav section
+  useEffect(() => {
+    const ids = ['top', 'features', 'how-it-works', 'faq']
+    const observers = ids.map((id) => {
+      const el = document.getElementById(id)
+      if (!el) return null
+      const obs = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) setActiveSection(id) },
+        { threshold: 0.2, rootMargin: '-64px 0px -50% 0px' },
+      )
+      obs.observe(el)
+      return { obs, el }
+    })
+    return () => observers.forEach((o) => o?.obs.unobserve(o.el))
+  }, [])
+
+  // Auth-aware CTA — authenticated → /resumes, guest → /login?redirect
+  const handleCTA = () => {
+    if (isAuthenticated) {
+      navigate('/resumes')
+    } else {
+      navigate('/login?redirect=%2Fresumes')
+    }
+  }
+
+  const handleLogin = () => navigate('/login')
+  const handleDemo = () => scrollTo('how-it-works')
+
+  return (
+    <div
+      id="top"
+      className="min-h-screen overflow-x-hidden bg-background text-foreground"
+    >
+      {/* Subtle animated background gradient */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        {/* Radial glow 1 — top-left */}
+        <div
+          className="absolute -top-40 -left-32 h-[700px] w-[700px] rounded-full opacity-30"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 65%)' }}
+        />
+        {/* Radial glow 2 — bottom-right */}
+        <div
+          className="absolute bottom-0 right-0 h-[600px] w-[600px] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 65%)' }}
+        />
+        {/* Noise texture overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '200px 200px',
+          }}
+          aria-hidden="true"
+        />
+        {/* Animated center orb */}
+        <motion.div
+          animate={{ opacity: [0.03, 0.06, 0.03] }}
+          transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute left-1/2 top-0 h-[800px] w-[800px] -translate-x-1/2 rounded-full"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)' }}
+        />
+      </div>
+
+      <Navbar
+        activeSection={activeSection}
+        onScroll={scrollTo}
+        onLogin={handleLogin}
+      />
+
+      <main>
+        <HeroSection onCTA={handleCTA} onDemo={handleDemo} />
+        <TaglineStrip />
+        <FeaturesSection />
+        <HowItWorksSection />
+        <FaqSection />
+        <CtaSection onLogin={handleLogin} />
+      </main>
+
+      <Footer onScroll={scrollTo} />
+    </div>
+  )
+}

@@ -1,0 +1,299 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Geist-Variable.woff2") format("woff2");
+}
+
+@theme inline {
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-elevated: var(--card-elevated);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+  --color-danger: var(--destructive);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  /* Typography variables */
+  --color-text-section: var(--text-section);
+  --color-text-card: var(--text-card);
+  --color-text-body: var(--text-body-alt);
+  --color-text-secondary: var(--muted-foreground);
+  --color-text-muted-alt: var(--text-muted-alt);
+  --color-text-placeholder: var(--text-placeholder);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-elevation-sm: var(--shadow-sm);
+  --shadow-elevation-md: var(--shadow-md);
+  --shadow-elevation-lg: var(--shadow-lg);
+
+  --spacing-token-1: 4px;
+  --spacing-token-2: 8px;
+  --spacing-token-3: 12px;
+  --spacing-token-4: 16px;
+  --spacing-token-6: 24px;
+  --spacing-token-8: 32px;
+  --spacing-token-12: 48px;
+  --spacing-token-16: 64px;
+}
+
+/* ================================================================
+   DESIGN TOKENS — single source of truth for the whole app
+   ================================================================ */
+:root {
+  --radius: 0.625rem;
+
+  /* Page background */
+  --background: #08090E;
+  --foreground: #FFFFFF;
+
+  /* Card surfaces — must contrast against page bg */
+  --card: #111217;
+  --card-foreground: #FFFFFF;
+
+  /* Elevated card — one step above card */
+  --card-elevated: #171A22;
+  --card-elevated-foreground: #FFFFFF;
+
+  --popover: #171A22;
+  --popover-foreground: #FFFFFF;
+
+  /* Brand / Primary */
+  --primary: #8B5CF6;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary surface */
+  --secondary: #1A1D24;
+  --secondary-foreground: rgba(255, 255, 255, 0.92);
+
+  /* Accent */
+  --accent: #A78BFA;
+  --accent-foreground: #FFFFFF;
+
+  /* Semantic */
+  --success: #22C55E;
+  --success-foreground: #052E16;
+  --warning: #F59E0B;
+  --warning-foreground: #1C1400;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+
+  /* Muted surface */
+  --muted: #1A1D24;
+
+  /* ── TEXT HIERARCHY ──────────────────────────────────────────
+     These map directly to the design spec:
+     Page Titles        → --foreground         (#FFFFFF)
+     Section Titles     → --text-section       (rgba 255,255,255,0.95)
+     Card Titles        → --text-card          (rgba 255,255,255,0.92)
+     Body Text          → --text-body-alt      (rgba 255,255,255,0.78)
+     Secondary Text     → --muted-foreground   (rgba 255,255,255,0.60)
+     Muted Text         → --text-muted-alt     (rgba 255,255,255,0.45)
+     Placeholder        → --text-placeholder   (rgba 255,255,255,0.40)
+  ─────────────────────────────────────────────────────────────── */
+  --muted-foreground: rgba(255, 255, 255, 0.60);
+  --text-section: rgba(255, 255, 255, 0.95);
+  --text-card: rgba(255, 255, 255, 0.92);
+  --text-body-alt: rgba(255, 255, 255, 0.78);
+  --text-muted-alt: rgba(255, 255, 255, 0.45);
+  --text-placeholder: rgba(255, 255, 255, 0.40);
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #8B5CF6;
+
+  /* Sidebar */
+  --sidebar: #0D0E12;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #FFFFFF;
+
+  /* Elevation shadows — each one is more prominent */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5),
+               0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.6),
+               0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-lg: 0 16px 40px -4px rgba(0, 0, 0, 0.75),
+               0 0 0 1px rgba(255, 255, 255, 0.10);
+
+  --container-sm: 640px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+  --container-2xl: 1400px;
+}
+
+/* ================================================================
+   TYPOGRAPHY UTILITIES
+   ================================================================ */
+@utility text-display {
+  font-family: var(--font-sans);
+  font-size: 3rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+}
+
+@utility text-h1 {
+  font-family: var(--font-sans);
+  font-size: 2.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--foreground);
+}
+
+@utility text-h2 {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+@utility text-h3 {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-section);
+}
+
+@utility text-body {
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--text-body-alt);
+}
+
+@utility text-small {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-body-alt);
+}
+
+@utility text-caption {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+/* NOTE: Do NOT define a `text-muted` utility here — Tailwind v4 maps
+   `text-muted` to `color: var(--color-muted)` which is the dark surface
+   color #1A1D24. Use `text-muted-foreground` for readable muted text. */
+
+/* ================================================================
+   SHADOW UTILITIES
+   ================================================================ */
+@utility shadow-elevation-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+@utility shadow-elevation-md {
+  box-shadow: var(--shadow-md);
+}
+
+@utility shadow-elevation-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+/* ================================================================
+   BASE RESET
+   ================================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background-color: rgba(139, 92, 246, 0.35);
+  color: #ffffff;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ================================================================
+   SCROLLBAR
+   ================================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.20);
+}
+
+/* ================================================================
+   NATIVE SELECT / INPUT DARK THEME
+   ================================================================ */
+select,
+option {
+  background-color: var(--card);
+  color: var(--foreground);
+}
