@@ -547,7 +547,7 @@ You are free to use, modify, and distribute this project in personal and commerc
 
 <div align="center">
 
-Built and maintained by **Akshat Dubey**
+Built and maintained by **Akshat Dixit**
 
 [![GitHub](https://img.shields.io/badge/GitHub-akshatd845--maker-181717?style=for-the-badge&logo=github)](https://github.com/akshatd845-maker)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=for-the-badge&logo=linkedin)](https://linkedin.com/in/your-profile)
