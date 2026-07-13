@@ -39,7 +39,6 @@ export function ImprovementTimeline({ items = [] }) {
               </li>
             ))}
           </ol>
-          </ol>
         ) : (
           <p className="text-caption text-text-secondary">No improvement suggestions returned.</p>
         )}
