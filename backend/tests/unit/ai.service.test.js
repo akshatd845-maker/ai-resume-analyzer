@@ -16,6 +16,9 @@ describe('AI resume analysis profession detection', () => {
       'Mechanical Engineer with expertise in CAD modelling, tolerance analysis, manufacturing support, and production quality improvements.'
     );
 
+    expect(result.detectedProfile).toBeDefined();
+    expect(result.detectedProfile.profession).toMatch(/Mechanical/i);
+    expect(result.detectedProfile.industry).toMatch(/Manufacturing|Engineering/i);
     expect(result.industryFit.some((item) => /mechanical/i.test(item))).toBe(true);
     expect(result.recommendedJobRoles.some((role) => /mechanical|production|quality/i.test(role))).toBe(true);
     expect(result.missingSkills.some((skill) => /CATIA|ANSYS|GD&T/i.test(skill.name))).toBe(true);

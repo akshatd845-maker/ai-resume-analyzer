@@ -294,6 +294,14 @@ const generateMockAnalysis = (extractedData, rawText) => {
     atsScore,
     careerLevel: profile.careerLevel,
     yearsOfExperience: hasExperience ? Math.max(1, experience.length) : 0,
+    detectedProfile: {
+      profession: profile.profession,
+      industry: profile.industry,
+      careerLevel: profile.careerLevel,
+      experience: hasExperience ? `${experience.length} role${experience.length > 1 ? 's' : ''}` : 'No formal experience listed',
+      targetRoles: profile.targetRoles.slice(0, 4),
+      confidence: 'high',
+    },
     industryFit: [profile.domain, profile.industry, profile.targetRoles[0]].filter(Boolean),
     summary: `This resume presents a ${profile.careerLevel.toLowerCase()} ${profile.profession.toLowerCase()} candidate with expertise in ${skillLabel}. The document includes ${experienceLabel} and ${hasProjects ? `${projects.length} project${projects.length > 1 ? 's' : ''}` : 'limited project evidence'}. The strongest opportunity is to strengthen ${profile.profession.toLowerCase()}-specific ATS keywords and add quantified achievements so recruiters can quickly validate fit for ${profile.targetRoles[0].toLowerCase()}.`,
     strengths: [
