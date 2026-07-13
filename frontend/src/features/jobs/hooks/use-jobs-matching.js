@@ -37,11 +37,8 @@ export function useJobsMatching() {
     setError(null)
     try {
       const res = await jobsApi.matchResumeToJobs(resumeId)
-      // Do not invent shape: backend match controller returns `result` from service.
-      const payload = res?.data ?? res
-      // Axios usually sets res.data. ApiResponse wrapper might contain { data: { ... } }
-      // We'll safely unwrap.
-      const data = payload?.data ?? payload
+      // jobsApi returns response.data (the ApiResponse body): { success, message, data: { totalJobs, bestMatches } }
+      const data = res?.data ?? res
 
       setMatches({
         totalJobs: data?.totalJobs ?? 0,

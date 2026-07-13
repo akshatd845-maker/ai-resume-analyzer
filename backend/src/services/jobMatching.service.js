@@ -277,7 +277,10 @@ const matchResumeToJobs = async (userId, resumeId) => {
   const historyDocs = [];
 
   for (const job of jobs) {
-    const matchResult = calculateJobMatch(analysis, job);
+    const matchResult = calculateJobMatch(
+      { extractedData: analysis.extractedData, rawText: analysis.rawText || '' },
+      job
+    );
 
     historyDocs.push({
       user: userId,

@@ -45,7 +45,7 @@ function CompanyInitials({ name = '' }) {
 }
 
 function JobRow({ match, index }) {
-  const company = match.company ?? match.jobTitle ?? 'Company'
+  const company = match.jobTitle ?? match.company ?? match.role ?? 'Company'
   const role = match.jobTitle ?? match.role ?? 'Role'
   const location = match.location ?? 'Remote'
   const isRemote = match.remote ?? location?.toLowerCase().includes('remote')

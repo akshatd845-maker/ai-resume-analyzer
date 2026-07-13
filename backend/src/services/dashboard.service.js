@@ -99,7 +99,9 @@ const getUserDashboard = async (userId) => {
   }
 
   // Get job matching stats
-  const matchHistory = await MatchHistory.find({ user: userId }).sort({ matchedAt: -1 });
+  const matchHistory = await MatchHistory.find({ user: userId })
+    .populate('job', 'title location employmentType category')
+    .sort({ matchedAt: -1 });
   const totalMatches = matchHistory.length;
   const bestMatchedJobs = matchHistory
     .filter(m => m.matchPercentage)
@@ -146,7 +148,11 @@ const getUserDashboard = async (userId) => {
     jobMatching: {
       totalMatches,
       bestMatches: bestMatchedJobs.map(m => ({
-        jobId: m.job,
+        jobId: m.job?._id ?? m.job,
+        jobTitle: m.job?.title ?? null,
+        location: m.job?.location ?? null,
+        employmentType: m.job?.employmentType ?? null,
+        category: m.job?.category ?? null,
         matchPercentage: m.matchPercentage,
         matchedAt: m.matchedAt,
       })),
