@@ -2,6 +2,61 @@ const ApiError = require('../utils/ApiError');
 
 const VALID_CAREER_LEVELS = ['Entry Level', 'Mid Level', 'Senior Level', 'Executive', 'Student/Intern'];
 const VALID_PRIORITIES = ['high', 'medium', 'low'];
+const VALID_IMPACTS = ['High', 'Medium', 'Low'];
+const VALID_DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+
+/**
+ * Normalise a single strength or weakness item.
+ * Accepts:
+ *   - plain string → { title: "Strength N", description: string }
+ *   - { title, description } object → pass through
+ *   - { text } fallback → { title: "...", description: text }
+ */
+const normaliseInsightItem = (item, fallbackLabel) => {
+  if (typeof item === 'string' && item.trim()) {
+    return { title: fallbackLabel, description: item.trim() };
+  }
+  if (item && typeof item === 'object') {
+    const title = typeof item.title === 'string' && item.title.trim()
+      ? item.title.trim()
+      : fallbackLabel;
+    const description = typeof item.description === 'string' && item.description.trim()
+      ? item.description.trim()
+      : typeof item.text === 'string' && item.text.trim()
+        ? item.text.trim()
+        : '';
+    if (description) return { title, description };
+  }
+  return null;
+};
+
+/**
+ * Normalise a missingSkill item.
+ * Accepts:
+ *   - plain string → { name: string, reason: "Provided by the backend." }
+ *   - { name, reason } object → pass through
+ *   - { skill, description } fallback
+ */
+const normaliseMissingSkill = (item) => {
+  if (typeof item === 'string' && item.trim()) {
+    return { name: item.trim(), reason: 'Recommended for stronger ATS keyword coverage in this domain.' };
+  }
+  if (item && typeof item === 'object') {
+    const name = typeof item.name === 'string' && item.name.trim()
+      ? item.name.trim()
+      : typeof item.skill === 'string' && item.skill.trim()
+        ? item.skill.trim()
+        : null;
+    if (!name) return null;
+    const reason = typeof item.reason === 'string' && item.reason.trim()
+      ? item.reason.trim()
+      : typeof item.description === 'string' && item.description.trim()
+        ? item.description.trim()
+        : 'Recommended for stronger ATS keyword coverage in this domain.';
+    return { name, reason };
+  }
+  return null;
+};
 
 const validateAIResponse = (response) => {
   try {
@@ -47,44 +102,61 @@ const validateAIResponse = (response) => {
       throw new Error('summary must be a string');
     }
 
-    // Validate simple string arrays
-    const stringArrayFields = ['strengths', 'weaknesses', 'missingSkills', 'recommendedJobRoles'];
-    for (const field of stringArrayFields) {
-      if (!Array.isArray(parsed[field])) {
-        // Coerce to empty array rather than hard-fail
-        parsed[field] = [];
-      }
-    }
+    // ── Strengths — accept string[] or object[] ──────────────────────────────
+    const strengths = Array.isArray(parsed.strengths)
+      ? parsed.strengths
+          .map((s, i) => normaliseInsightItem(s, `Strength ${i + 1}`))
+          .filter(Boolean)
+      : [];
 
-    // Normalise improvementSuggestions — accept both old string[] and new object[] formats
+    // ── Weaknesses — accept string[] or object[] ─────────────────────────────
+    const weaknesses = Array.isArray(parsed.weaknesses)
+      ? parsed.weaknesses
+          .map((w, i) => normaliseInsightItem(w, `Weakness ${i + 1}`))
+          .filter(Boolean)
+      : [];
+
+    // ── Missing skills — accept string[] or object[] ─────────────────────────
+    const missingSkills = Array.isArray(parsed.missingSkills)
+      ? parsed.missingSkills.map(normaliseMissingSkill).filter(Boolean)
+      : [];
+
+    // ── Improvement suggestions ───────────────────────────────────────────────
     let improvementSuggestions = [];
     if (Array.isArray(parsed.improvementSuggestions)) {
       improvementSuggestions = parsed.improvementSuggestions.map((item) => {
         if (typeof item === 'string') {
-          return { section: 'General', suggestion: item.trim(), priority: 'medium' };
+          return { section: 'General', suggestion: item.trim(), priority: 'medium', estimatedImpact: null, difficulty: null };
         }
         if (typeof item === 'object' && item !== null) {
           return {
             section: typeof item.section === 'string' ? item.section.trim() : 'General',
             suggestion: typeof item.suggestion === 'string' ? item.suggestion.trim() : '',
             priority: VALID_PRIORITIES.includes(item.priority) ? item.priority : 'medium',
+            estimatedImpact: VALID_IMPACTS.includes(item.estimatedImpact) ? item.estimatedImpact : null,
+            difficulty: VALID_DIFFICULTIES.includes(item.difficulty) ? item.difficulty : null,
           };
         }
         return null;
       }).filter(Boolean).filter((s) => s.suggestion.length > 0);
     }
 
-    // Career level (optional enhanced field)
+    // ── Career level ──────────────────────────────────────────────────────────
     const careerLevel = VALID_CAREER_LEVELS.includes(parsed.careerLevel)
       ? parsed.careerLevel
-      : 'Mid Level';
+      : 'Entry Level';
 
-    // Industry fit (optional enhanced field)
+    // ── Industry fit ──────────────────────────────────────────────────────────
     const industryFit = Array.isArray(parsed.industryFit)
       ? parsed.industryFit.filter((s) => typeof s === 'string' && s.trim()).slice(0, 5)
       : [];
 
-    // Keyword optimization (optional enhanced field)
+    // ── Recommended job roles ─────────────────────────────────────────────────
+    const recommendedJobRoles = Array.isArray(parsed.recommendedJobRoles)
+      ? parsed.recommendedJobRoles.filter((r) => typeof r === 'string' && r.trim())
+      : [];
+
+    // ── Keyword optimisation ──────────────────────────────────────────────────
     const keywordOptimization = parsed.keywordOptimization && typeof parsed.keywordOptimization === 'object'
       ? {
           wellUsed: Array.isArray(parsed.keywordOptimization.wellUsed)
@@ -96,7 +168,7 @@ const validateAIResponse = (response) => {
         }
       : { wellUsed: [], shouldAdd: [] };
 
-    // Section feedback (optional enhanced field)
+    // ── Section feedback ──────────────────────────────────────────────────────
     const sectionFeedback = parsed.sectionFeedback && typeof parsed.sectionFeedback === 'object'
       ? {
           contact: typeof parsed.sectionFeedback.contact === 'string' ? parsed.sectionFeedback.contact.trim() : '',
@@ -108,12 +180,12 @@ const validateAIResponse = (response) => {
         }
       : { contact: '', summary: '', skills: '', experience: '', education: '', overall: '' };
 
-    // yearsOfExperience (new field)
+    // ── Years of experience ───────────────────────────────────────────────────
     const yearsOfExperience = typeof parsed.yearsOfExperience === 'number' && parsed.yearsOfExperience >= 0
       ? Math.round(parsed.yearsOfExperience)
       : null;
 
-    // scoreBreakdown (new field)
+    // ── Score breakdown ───────────────────────────────────────────────────────
     const scoreBreakdownFields = ['contactInfo', 'summary', 'workExperience', 'skills', 'education', 'achievements', 'keywords', 'formatting'];
     let scoreBreakdown = null;
     if (parsed.scoreBreakdown && typeof parsed.scoreBreakdown === 'object') {
@@ -130,11 +202,11 @@ const validateAIResponse = (response) => {
       yearsOfExperience,
       industryFit,
       summary: parsed.summary.trim(),
-      strengths: parsed.strengths.filter((s) => typeof s === 'string' && s.trim()),
-      weaknesses: parsed.weaknesses.filter((w) => typeof w === 'string' && w.trim()),
-      missingSkills: parsed.missingSkills.filter((s) => typeof s === 'string' && s.trim()),
+      strengths,
+      weaknesses,
+      missingSkills,
       improvementSuggestions,
-      recommendedJobRoles: parsed.recommendedJobRoles.filter((r) => typeof r === 'string' && r.trim()),
+      recommendedJobRoles,
       keywordOptimization,
       sectionFeedback,
       ...(scoreBreakdown && { scoreBreakdown }),

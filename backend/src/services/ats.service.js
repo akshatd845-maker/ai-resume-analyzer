@@ -110,54 +110,115 @@ const getRecommendations = (categoryScores, missingSections, missingKeywords) =>
 
   // Contact recommendations
   if (categoryScores.contact < 50) {
-    recommendations.push('Add your email and phone number to improve contactability');
+    recommendations.push(
+      'Critical: Add your email address and phone number. Recruiters cannot contact you without these — ATS will also penalise a missing contact section.'
+    );
+  } else if (categoryScores.contact < 80) {
+    recommendations.push(
+      'Add your LinkedIn profile URL and GitHub profile link to the contact section. These are screened by both ATS and human reviewers for software engineering roles.'
+    );
   }
 
   // Summary recommendations
-  if (categoryScores.summary < 50) {
-    recommendations.push('Add a professional summary (50-500 characters)');
+  if (categoryScores.summary < 30) {
+    recommendations.push(
+      'Add a professional summary (3–5 sentences) directly below your contact info. Lead with your career level, primary tech stack, and one quantified achievement. This section gets the most recruiter attention and is prime real estate for ATS keywords.'
+    );
+  } else if (categoryScores.summary < 70) {
+    recommendations.push(
+      'Your summary exists but appears short. Expand it to 80–200 words: include your strongest technologies, years of relevant experience, and a concrete accomplishment (e.g. "Built a REST API serving 10,000 daily requests").'
+    );
   }
 
   // Skills recommendations
-  if (categoryScores.skills < 50) {
-    recommendations.push('Add more technical skills (aim for at least 10)');
+  if (categoryScores.skills < 30) {
+    recommendations.push(
+      'Add a dedicated Skills section with at least 12–15 relevant technologies. Organise them into sub-categories: Languages, Frameworks, Databases, DevOps/Cloud, and Testing. This is the section ATS parsers scan most aggressively.'
+    );
+  } else if (categoryScores.skills < 60) {
+    recommendations.push(
+      'Your skills section exists but appears thin. Expand it to cover your full stack — include databases, cloud platforms, and testing frameworks alongside core languages. Each additional relevant keyword increases ATS match rates.'
+    );
   } else if (categoryScores.skills < 80) {
-    recommendations.push('Consider adding more relevant skills');
+    recommendations.push(
+      'Consider organising your skills into sub-categories (Languages / Frameworks / Tools / Cloud) rather than a flat list. This helps ATS parse the section correctly and signals technical depth to reviewers.'
+    );
   }
 
   // Experience recommendations
-  if (categoryScores.experience < 50) {
-    recommendations.push('Add work experience with company names and dates');
+  if (categoryScores.experience < 20) {
+    recommendations.push(
+      'No work experience is detected. Add any professional experience you have — internships, freelance projects, part-time roles, campus technical clubs, or open-source contributions. If genuinely absent, ensure your Projects section is very strong with clear outcomes.'
+    );
+  } else if (categoryScores.experience < 50) {
+    recommendations.push(
+      'Work experience entries are present but sparse. Each role should include: company name, job title, employment dates (Month Year – Month Year format), and 3–5 bullet points. Start each bullet with a strong action verb (Built, Architected, Delivered, Reduced, Increased).'
+    );
+  } else if (categoryScores.experience < 75) {
+    recommendations.push(
+      'Add quantified achievements to your experience bullets. Replace vague statements like "worked on features" with specific outcomes: "Reduced API latency by 40% by introducing Redis caching" or "Shipped 3 product features used by 8,000+ active users".'
+    );
   }
 
   // Education recommendations
-  if (categoryScores.education < 50) {
-    recommendations.push('Add education details including institution and graduation year');
+  if (categoryScores.education < 30) {
+    recommendations.push(
+      'Add an Education section with your degree name, institution, and expected/actual graduation year. If your GPA is 3.5 or above, include it — it helps for early-career roles.'
+    );
+  } else if (categoryScores.education < 70) {
+    recommendations.push(
+      'Ensure your education entry includes the full degree name (e.g. "B.Tech in Computer Science"), institution name, and graduation year. A missing year confuses ATS systems.'
+    );
+  }
+
+  // Projects recommendations
+  if (categoryScores.projects < 30) {
+    recommendations.push(
+      'Add a Projects section with 2–4 personal or academic projects. For each project include: what problem it solves, the tech stack, a GitHub or live URL, and at least one metric (e.g. "deployed on AWS, handles 500 concurrent users").'
+    );
+  } else if (categoryScores.projects < 60) {
+    recommendations.push(
+      'Your projects section exists but descriptions may be thin. Add a GitHub link and one measurable outcome to each project. Deployment details (Heroku, Vercel, AWS) and user metrics significantly increase project credibility.'
+    );
   }
 
   // Keywords recommendations
-  if (categoryScores.keywords < 50) {
-    recommendations.push('Include more industry-relevant keywords');
+  if (categoryScores.keywords < 40) {
+    recommendations.push(
+      'Your resume has low keyword density for ATS systems. Ensure your skills, experience, and project descriptions naturally include industry-standard terms: REST API, CI/CD, Git, Docker, Agile, and the specific frameworks you use.'
+    );
+  } else if (categoryScores.keywords < 65) {
+    recommendations.push(
+      'Keyword coverage is moderate. Review the job descriptions you\'re targeting and mirror their exact phrasing where it genuinely applies (e.g. "containerisation" vs "Docker", "version control" vs "Git").'
+    );
   }
 
   // Achievements recommendations
-  if (categoryScores.achievements < 50) {
-    recommendations.push('Add quantifiable achievements (e.g., "increased sales by 20%")');
+  if (categoryScores.achievements < 30) {
+    recommendations.push(
+      'No quantified achievements detected. This is the single biggest ATS differentiator. Add at least 3 metrics anywhere in your resume: performance improvements (%), users served, team size, projects delivered, or cost savings ($).'
+    );
   }
 
   // Formatting recommendations
-  if (categoryScores.formatting < 70) {
-    recommendations.push('Aim for 400-800 words for optimal resume length');
+  if (categoryScores.formatting < 50) {
+    recommendations.push(
+      'Resume word count appears outside the optimal 350–750 word range. Too short signals a sparse resume; too long risks being cut off by ATS. Aim for one full page (400–600 words) for entry/mid-level roles.'
+    );
   }
 
   // Missing sections
   for (const section of missingSections) {
-    recommendations.push(`Add ${section.toLowerCase()}`);
+    if (!recommendations.some(r => r.toLowerCase().includes(section.toLowerCase().slice(0, 8)))) {
+      recommendations.push(`Missing section detected: "${section}". Add this section — ATS systems score resumes partly based on section completeness.`);
+    }
   }
 
   // Missing keywords suggestions
   if (missingKeywords.length > 0) {
-    recommendations.push(`Consider adding skills like: ${missingKeywords.slice(0, 5).join(', ')}`);
+    recommendations.push(
+      `High-value ATS keywords not found in your resume: ${missingKeywords.slice(0, 6).join(', ')}. Add these where they genuinely apply — in your Skills section, project descriptions, or experience bullets.`
+    );
   }
 
   return recommendations;
