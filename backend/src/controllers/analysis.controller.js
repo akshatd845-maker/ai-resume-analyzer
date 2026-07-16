@@ -6,8 +6,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const analyzeResume = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const { resumeId } = req.params;
+  const { jobDescription } = req.body || {}; // Optional job description for hard gate check
 
-  const analysis = await analysisService.analyzeResumeById(userId, resumeId);
+  const analysis = await analysisService.analyzeResumeById(userId, resumeId, jobDescription);
 
   const response = ApiResponse.success('Resume analyzed successfully', {
     analysis,

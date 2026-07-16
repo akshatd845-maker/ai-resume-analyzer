@@ -92,13 +92,76 @@ const atsCategoryScoresSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Hard gate check schema
+const hardGateCheckSchema = new mongoose.Schema(
+  {
+    passed: { type: Boolean, default: null },
+    missingRequirements: [{
+      requirement: { type: String, default: '' },
+      severity: { type: String, enum: ['critical', 'high', 'medium'], default: 'medium' },
+      found: { type: Boolean, default: false },
+    }],
+    totalMissing: { type: Number, default: 0 },
+    reason: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const atsResultsSchema = new mongoose.Schema(
   {
     overallScore: { type: Number, default: 0 },
     categoryScores: { type: atsCategoryScoresSchema, default: {} },
+    weightsUsed: {
+      contact: { type: Number, default: 5 },
+      summary: { type: Number, default: 10 },
+      skills: { type: Number, default: 18 },
+      education: { type: Number, default: 12 },
+      experience: { type: Number, default: 25 },
+      projects: { type: Number, default: 8 },
+      certifications: { type: Number, default: 5 },
+      keywords: { type: Number, default: 10 },
+      achievements: { type: Number, default: 5 },
+      formatting: { type: Number, default: 2 },
+    },
     missingSections: [{ type: String }],
     missingKeywords: [{ type: String }],
     recommendations: [{ type: String }],
+    // New field-adaptive fields
+    hardGateCheck: { type: hardGateCheckSchema, default: null },
+    missingForField: [missingForFieldSchema],
+  },
+  { _id: false }
+);
+
+// Detected field schema for field-adaptive analysis
+const detectedFieldSchema = new mongoose.Schema(
+  {
+    profession: { type: String, default: '' },
+    seniority: { type: String, enum: ['entry', 'mid', 'senior', 'executive'], default: 'entry' },
+    fieldCategory: { type: String, default: '' },
+    evaluationCriteria: [{ type: String }],
+    criticalCredential: { type: String, default: null },
+  },
+  { _id: false }
+);
+
+// Honest verdict schema
+const honestVerdictSchema = new mongoose.Schema(
+  {
+    text: { type: String, default: '' },
+    isRecommended: { type: Boolean, default: true },
+    atsScore: { type: Number, default: 0 },
+    criticalIssues: [{ type: String }],
+  },
+  { _id: false }
+);
+
+// Missing for field schema
+const missingForFieldSchema = new mongoose.Schema(
+  {
+    item: { type: String, default: '' },
+    type: { type: String, enum: ['evaluation_criterion', 'credential'], default: 'evaluation_criterion' },
+    whyItMatters: { type: String, default: '' },
   },
   { _id: false }
 );
@@ -133,6 +196,10 @@ const resumeAnalysisSchema = new mongoose.Schema(
     analysisError: { type: String, default: null },
     analyzedAt: { type: Date, default: null },
     atsResults: { type: atsResultsSchema, default: null },
+    // New field-adaptive analysis fields
+    detectedField: { type: detectedFieldSchema, default: null },
+    honestVerdict: { type: honestVerdictSchema, default: null },
+    missingForField: [missingForFieldSchema],
   },
   {
     timestamps: true,

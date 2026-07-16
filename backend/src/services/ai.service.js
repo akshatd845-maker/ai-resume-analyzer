@@ -1,6 +1,127 @@
 const OpenAI = require('openai');
+const crypto = require('crypto');
 const ApiError = require('../utils/ApiError');
 const validateAIResponse = require('../utils/aiResponseValidator');
+
+// Field category mapping for ATS scoring weights
+const FIELD_CATEGORIES = {
+  healthcare: {
+    name: 'Healthcare/Clinical',
+    weights: { contact: 5, summary: 8, skills: 15, education: 20, experience: 20, projects: 5, certifications: 15, keywords: 5, achievements: 5, formatting: 2 },
+    criticalSection: 'certifications',
+  },
+  nursing: {
+    name: 'Nursing',
+    weights: { contact: 5, summary: 8, skills: 15, education: 20, experience: 22, projects: 3, certifications: 15, keywords: 5, achievements: 5, formatting: 2 },
+    criticalSection: 'certifications',
+  },
+  trades: {
+    name: 'Trades/Technical',
+    weights: { contact: 5, summary: 8, skills: 18, education: 12, experience: 30, projects: 8, certifications: 10, keywords: 5, achievements: 2, formatting: 2 },
+    criticalSection: 'experience',
+  },
+  sales: {
+    name: 'Sales/Business Development',
+    weights: { contact: 8, summary: 12, skills: 10, education: 8, experience: 25, projects: 3, certifications: 3, keywords: 12, achievements: 15, formatting: 4 },
+    criticalSection: 'achievements',
+  },
+  creative: {
+    name: 'Creative/Design',
+    weights: { contact: 5, summary: 10, skills: 20, education: 8, experience: 18, projects: 20, certifications: 3, keywords: 8, achievements: 5, formatting: 3 },
+    criticalSection: 'projects',
+  },
+  legal: {
+    name: 'Legal',
+    weights: { contact: 5, summary: 10, skills: 12, education: 18, experience: 28, projects: 3, certifications: 12, keywords: 8, achievements: 2, formatting: 2 },
+    criticalSection: 'experience',
+  },
+  finance: {
+    name: 'Finance/Accounting',
+    weights: { contact: 5, summary: 10, skills: 15, education: 18, experience: 22, projects: 3, certifications: 10, keywords: 10, achievements: 5, formatting: 2 },
+    criticalSection: 'education',
+  },
+  engineering: {
+    name: 'Engineering',
+    weights: { contact: 5, summary: 10, skills: 18, education: 15, experience: 22, projects: 12, certifications: 3, keywords: 10, achievements: 3, formatting: 2 },
+    criticalSection: 'skills',
+  },
+  teaching: {
+    name: 'Teaching/Education',
+    weights: { contact: 5, summary: 10, skills: 12, education: 25, experience: 22, projects: 8, certifications: 8, keywords: 5, achievements: 3, formatting: 2 },
+    criticalSection: 'education',
+  },
+  general: {
+    name: 'General',
+    weights: { contact: 5, summary: 10, skills: 18, education: 12, experience: 25, projects: 8, certifications: 5, keywords: 10, achievements: 5, formatting: 2 },
+    criticalSection: 'experience',
+  },
+};
+
+// Detect field category from free-text profession
+const detectFieldCategory = (profession) => {
+  const professionLower = (profession || '').toLowerCase();
+
+  // Healthcare/Clinical
+  if (/nurse|nursing|clinical|patient care|healthcare|medical|doctor|physician|pharmacist|therapist|paramedic/i.test(professionLower)) {
+    if (/nurse|nursing/i.test(professionLower)) return FIELD_CATEGORIES.nursing;
+    return FIELD_CATEGORIES.healthcare;
+  }
+
+  // Trades
+  if (/electrician|plumber|mechanic|hvac|welder|carpenter|technician|maintenance|construction/i.test(professionLower)) {
+    return FIELD_CATEGORIES.trades;
+  }
+
+  // Sales
+  if (/sales|business development|account manager|revenue|negotiation|client relations/i.test(professionLower)) {
+    return FIELD_CATEGORIES.sales;
+  }
+
+  // Creative
+  if (/design|designer|graphic|ux|ui|artist|creative|visual|branding|photographer|writer/i.test(professionLower)) {
+    return FIELD_CATEGORIES.creative;
+  }
+
+  // Legal
+  if (/lawyer|attorney|legal|counsel|paralegal|compliance|litigation/i.test(professionLower)) {
+    return FIELD_CATEGORIES.legal;
+  }
+
+  // Finance
+  if (/finance|accounting|audit|tax|bookkeeping|financial analyst|banking|investment|actuary/i.test(professionLower)) {
+    return FIELD_CATEGORIES.finance;
+  }
+
+  // Engineering
+  if (/engineer|engineering|software|developer|architect|technical/i.test(professionLower)) {
+    return FIELD_CATEGORIES.engineering;
+  }
+
+  // Teaching
+  if (/teacher|teaching|education|instructor|trainer|professor|academic|curriculum/i.test(professionLower)) {
+    return FIELD_CATEGORIES.teaching;
+  }
+
+  return FIELD_CATEGORIES.general;
+};
+
+// Field detection prompt
+const FIELD_DETECTION_PROMPT = `You are a resume classification system. Analyze the following resume and identify:
+1. The detected profession/field (free text, be specific like "Registered Nurse", "UX Designer", "Sales Executive")
+2. Seniority level (entry/mid/senior/executive)
+3. 5-7 evaluation criteria that actually matter for hiring in this specific field
+4. The type of credential or certification that matters most in this field (or "none" if not applicable)
+
+Resume text:
+{resumeText}
+
+Return ONLY a valid JSON object with this exact schema:
+{
+  "profession": "string",
+  "seniority": "entry|mid|senior|executive",
+  "evaluationCriteria": ["criterion1", "criterion2", "criterion3", "criterion4", "criterion5", "criterion6", "criterion7"],
+  "criticalCredential": "string or null"
+}`;
 
 const PROFESSION_PROFILES = [
   {
@@ -564,8 +685,136 @@ const analyzeResume = async (extractedData, rawText) => {
   }
 };
 
+// Detect field from resume using OpenAI (lightweight call)
+const detectField = async (resumeText) => {
+  const apiKey = process.env.AI_API_KEY;
+  const isMock = !apiKey || apiKey === 'your-openai-api-key';
+
+  if (isMock) {
+    // Fallback to keyword-based detection if no API key
+    console.log('Using mock field detection fallback (no API key configured)...');
+    return mockFieldDetection(resumeText);
+  }
+
+  const client = createAIClient();
+  const model = process.env.AI_MODEL || 'gpt-4o-mini';
+
+  // Truncate resume text to ~3000 chars for lightweight detection
+  const truncatedText = resumeText.length > 3000
+    ? `${resumeText.slice(0, 3000)}\n[...truncated]`
+    : resumeText;
+
+  const prompt = FIELD_DETECTION_PROMPT.replace('{resumeText}', truncatedText);
+
+  try {
+    // Create a 30-second timeout controller
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const completion = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a resume classification expert. Return ONLY valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      max_tokens: 500,
+    }, { signal: controller.signal });
+
+    clearTimeout(timeoutId);
+
+    const response = completion.choices[0]?.message?.content;
+    if (!response) {
+      throw ApiError.internal('Failed to get field detection response from AI');
+    }
+
+    const detected = JSON.parse(response);
+
+    // Map to field category for ATS scoring
+    const fieldCategory = detectFieldCategory(detected.profession);
+
+    return {
+      profession: detected.profession || 'General Professional',
+      seniority: detected.seniority || 'entry',
+      evaluationCriteria: detected.evaluationCriteria || [],
+      criticalCredential: detected.criticalCredential || null,
+      fieldCategory: fieldCategory.name,
+      fieldWeights: fieldCategory.weights,
+      criticalSection: fieldCategory.criticalSection,
+    };
+  } catch (error) {
+    if (error.name === 'AbortError' || error.code === 'ETIMEDOUT') {
+      throw ApiError.serviceUnavailable('AI service timeout - please try again');
+    }
+    if (error.status === 429) {
+      throw ApiError.serviceUnavailable('Rate limit exceeded - please try again later');
+    }
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    // Fallback on parsing errors
+    console.error('Field detection error, using fallback:', error.message);
+    return mockFieldDetection(resumeText);
+  }
+};
+
+// Mock field detection for when no API key is available
+const mockFieldDetection = (resumeText) => {
+  const textLower = (resumeText || '').toLowerCase();
+
+  // Simple keyword-based fallback
+  let profession = 'General Professional';
+  let seniority = 'entry';
+
+  if (/nurse|nursing|patient care|clinical/i.test(textLower)) {
+    profession = 'Registered Nurse';
+  } else if (/software|developer|engineer|programmer|react|node|python/i.test(textLower)) {
+    profession = 'Software Engineer';
+  } else if (/sales|business development|account/i.test(textLower)) {
+    profession = 'Sales Executive';
+  } else if (/teacher|teaching|education|instructor/i.test(textLower)) {
+    profession = 'Teacher';
+  } else if (/design|graphic|ux|ui|figma/i.test(textLower)) {
+    profession = 'UX Designer';
+  } else if (/accountant|finance|audit|tax/i.test(textLower)) {
+    profession = 'Financial Analyst';
+  } else if (/lawyer|attorney|legal/i.test(textLower)) {
+    profession = 'Lawyer';
+  }
+
+  // Infer seniority
+  if (/\b(senior|lead|principal|manager|director|head)\b/i.test(textLower)) {
+    seniority = 'senior';
+  } else if (/\b(mid|junior|associate|intern)\b/i.test(textLower)) {
+    seniority = 'entry';
+  }
+
+  const fieldCategory = detectFieldCategory(profession);
+
+  return {
+    profession,
+    seniority,
+    evaluationCriteria: ['Communication', 'Problem Solving', 'Technical Skills', 'Teamwork', 'Leadership'],
+    criticalCredential: null,
+    fieldCategory: fieldCategory.name,
+    fieldWeights: fieldCategory.weights,
+    criticalSection: fieldCategory.criticalSection,
+  };
+};
+
+// Generate cache key from resume content
+const generateCacheKey = (userId, resumeText, jobDescription = null) => {
+  const content = `${userId}:${resumeText.slice(0, 5000)}:${jobDescription || ''}`;
+  return `resume_analysis:${crypto.createHash('sha256').update(content).digest('hex')}`;
+};
+
 module.exports = {
   analyzeResume,
   createAIClient,
   buildAnalysisPrompt,
+  detectField,
+  detectFieldCategory,
+  generateCacheKey,
+  FIELD_CATEGORIES,
 };

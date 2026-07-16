@@ -14,4 +14,11 @@ export { AnalysisHeader } from './analysis-header'
 export { AnalysisCategoryGrid } from './analysis-breakdown'
 export { AnalysisPreviewPanel } from './analysis-preview'
 
+export {
+  DetectedFieldBadge,
+  HonestVerdictCard,
+  HardGateWarning,
+  MissingForFieldCard,
+  EvidenceInsightCard,
+} from './detected-field-card'
 

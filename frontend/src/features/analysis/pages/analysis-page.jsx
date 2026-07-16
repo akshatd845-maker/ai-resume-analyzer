@@ -15,6 +15,12 @@ import {
 } from '@/features/analysis/components'
 import { AnalysisPreviewPanel } from '@/features/analysis/components/analysis-preview'
 import { formatCategoryScores } from '@/features/analysis/utils/category-scores'
+import {
+  DetectedFieldBadge,
+  HonestVerdictCard,
+  HardGateWarning,
+  MissingForFieldCard,
+} from '@/features/analysis/components/detected-field-card'
 
 export function AnalysisPage() {
   const { resumeId } = useParams()
@@ -71,6 +77,12 @@ export function AnalysisPage() {
   const weaknesses = analysis?.aiAnalysis?.weaknesses ?? analysis?.weaknesses ?? []
 
   const missingSkills = analysis?.aiAnalysis?.missingSkills ?? analysis?.missingSkills ?? []
+
+  // New field-adaptive analysis data
+  const detectedField = analysis?.detectedField ?? null
+  const honestVerdict = analysis?.honestVerdict ?? analysis?.aiAnalysis?.honestVerdict ?? null
+  const hardGateCheck = analysis?.atsResults?.hardGateCheck ?? null
+  const missingForField = analysis?.atsResults?.missingForField ?? analysis?.missingForField ?? []
 
   const improvements =
     analysis?.aiAnalysis?.improvementSuggestions ??
@@ -142,14 +154,36 @@ export function AnalysisPage() {
           onDownloadReport={() => {}}
         />
 
+        {/* Field-adaptive analysis alerts */}
+        <div className="space-y-3">
+          {/* Hard gate warning takes highest priority */}
+          <HardGateWarning hardGateCheck={hardGateCheck} />
+
+          {/* Honest verdict card with recommendation */}
+          <HonestVerdictCard verdict={honestVerdict} atsScore={resume.atsScore} />
+        </div>
+
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <div className="space-y-6">
+            {/* Detected field badges */}
+            {detectedField && (
+              <div className="rounded-lg border border-border bg-card p-4 shadow-elevation-sm">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Detected Profile</h3>
+                <DetectedFieldBadge detectedField={detectedField} />
+              </div>
+            )}
+
             <ATSScoreCard atsScore={resume.atsScore} previousScore={analysis?.previousAtsScore ?? null} />
 
             <section aria-label="Resume score breakdown">
               <h2 className="text-h3 mb-3">Resume Score Breakdown</h2>
               <AnalysisCategoryGrid categories={categories} />
             </section>
+
+            {/* Field-specific requirements */}
+            {missingForField.length > 0 && (
+              <MissingForFieldCard missingForField={missingForField} />
+            )}
 
             <AISummaryCard analysis={analysis} />
 

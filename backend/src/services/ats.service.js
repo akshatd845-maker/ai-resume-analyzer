@@ -15,8 +15,8 @@ const {
   calculateFormattingScore,
 } = require('../utils/scoringHelpers');
 
-// Weights defined locally to avoid circular dependency
-const WEIGHTS = {
+// Default weights (general/engineering focused)
+const DEFAULT_WEIGHTS = {
   contact: 5,
   summary: 10,
   skills: 18,
@@ -29,10 +29,16 @@ const WEIGHTS = {
   formatting: 2,
 };
 
+// Legacy export for backward compatibility
+const WEIGHTS = DEFAULT_WEIGHTS;
+
 /**
- * Calculate ATS score for a resume
+ * Calculate ATS score for a resume with optional field-adaptive weights
+ * @param {Object} extractedData - Parsed resume data
+ * @param {string} rawText - Raw resume text
+ * @param {Object} customWeights - Optional field-specific weights
  */
-const calculateATSScore = (extractedData, rawText) => {
+const calculateATSScore = (extractedData, rawText, customWeights = null) => {
   // Calculate individual category scores
   const categoryScores = {
     contact: calculateContactScore(extractedData),
@@ -47,9 +53,12 @@ const calculateATSScore = (extractedData, rawText) => {
     formatting: calculateFormattingScore(rawText),
   };
 
+  // Use custom weights if provided (field-adaptive), otherwise use defaults
+  const weights = customWeights || DEFAULT_WEIGHTS;
+
   // Calculate weighted overall score
   let overallScore = 0;
-  for (const [category, weight] of Object.entries(WEIGHTS)) {
+  for (const [category, weight] of Object.entries(weights)) {
     overallScore += (categoryScores[category] || 0) * (weight / 100);
   }
 
@@ -59,7 +68,187 @@ const calculateATSScore = (extractedData, rawText) => {
   return {
     overallScore,
     categoryScores,
+    weightsUsed: weights,
   };
+};
+
+/**
+ * Hard gate check - simulates real ATS auto-filtering based on job requirements
+ * Returns pass/fail status and list of missing requirements
+ */
+const performHardGateCheck = (extractedData, rawText, jobDescription, fieldInfo = null) => {
+  if (!jobDescription || !jobDescription.trim()) {
+    return { passed: null, missingRequirements: [], reason: 'No job description provided' };
+  }
+
+  const jdLower = jobDescription.toLowerCase();
+  const resumeLower = (rawText || '').toLowerCase();
+  const skillsLower = (extractedData.skills || []).map(s => s.toLowerCase()).join(' ');
+  const experienceLower = (extractedData.experience || []).map(e => e.toLowerCase()).join(' ');
+  const educationLower = (extractedData.education || []).map(e => e.toLowerCase()).join(' ');
+  const certsLower = (extractedData.certifications || []).map(c => c.toLowerCase()).join(' ');
+
+  const missingRequirements = [];
+  let hasHardFail = false;
+
+  // Extract requirements from JD - look for "must have", "required", "minimum"
+  const requirementPatterns = [
+    { pattern: /(\w+)\+?\s+years?\s+(of\s+)?experience/i, label: 'Years of Experience', type: 'experience' },
+    { pattern: /(bachelor|master|phd|degree|diploma)/i, label: 'Education Requirement', type: 'education' },
+    { pattern: /(certified|certification|certificate)\s+(\w+)/i, label: 'Certification', type: 'certification' },
+  ];
+
+  // Check for explicit years of experience requirement
+  const yearsMatch = jdLower.match(/(\d+)\+?\s+years?/);
+  if (yearsMatch) {
+    const requiredYears = parseInt(yearsMatch[1]);
+    // Try to estimate years from experience section
+    const expEntries = extractedData.experience || [];
+    if (expEntries.length === 0) {
+      missingRequirements.push({ requirement: `${requiredYears}+ years experience`, severity: 'critical', found: false });
+      hasHardFail = true;
+    }
+  }
+
+  // Check for education requirements
+  if (/(bachelor|master|phd|degree)/i.test(jdLower)) {
+    const hasDegree = /(bachelor|master|phd|degree)/i.test(educationLower);
+    if (!hasDegree) {
+      missingRequirements.push({ requirement: 'Required degree', severity: 'critical', found: false });
+      hasHardFail = true;
+    }
+  }
+
+  // Check for specific skills mentioned as "required" or "must have"
+  const requiredSkillsPatterns = [
+    /must\s+have\s+([^.]+)/i,
+    /required\s+([^.]+)/i,
+    /minimum\s+([^.]+)/i,
+  ];
+
+  for (const pattern of requiredSkillsPatterns) {
+    const match = jdLower.match(pattern);
+    if (match) {
+      const requiredText = match[1];
+      // Check if any required skill is missing
+      const requiredWords = requiredText.split(/[,;]/).map(w => w.trim()).filter(w => w.length > 2);
+      for (const word of requiredWords) {
+        const found = skillsLower.includes(word) || resumeLower.includes(word);
+        if (!found && word.length > 3) {
+          missingRequirements.push({ requirement: `Skill: ${word}`, severity: 'high', found: false });
+        }
+      }
+    }
+  }
+
+  // Field-specific critical requirements check
+  if (fieldInfo && fieldInfo.criticalCredential) {
+    const credentialType = fieldInfo.criticalCredential.toLowerCase();
+    const hasCredential = certsLower.includes(credentialType) || educationLower.includes(credentialType);
+    if (!hasCredential) {
+      missingRequirements.push({
+        requirement: `${fieldInfo.criticalCredential} certification/license`,
+        severity: 'critical',
+        found: false,
+      });
+      hasHardFail = true;
+    }
+  }
+
+  // Critical section check (e.g., certifications for nursing)
+  if (fieldInfo && fieldInfo.criticalSection) {
+    const criticalSection = fieldInfo.criticalSection;
+    let hasContent = false;
+
+    switch (criticalSection) {
+      case 'certifications':
+        hasContent = extractedData.certifications && extractedData.certifications.length > 0;
+        break;
+      case 'experience':
+        hasContent = extractedData.experience && extractedData.experience.length > 0;
+        break;
+      case 'education':
+        hasContent = extractedData.education && extractedData.education.length > 0;
+        break;
+      case 'projects':
+        hasContent = extractedData.projects && extractedData.projects.length > 0;
+        break;
+      case 'skills':
+        hasContent = extractedData.skills && extractedData.skills.length > 0;
+        break;
+    }
+
+    if (!hasContent) {
+      missingRequirements.push({
+        requirement: `Required section: ${criticalSection}`,
+        severity: 'critical',
+        found: false,
+      });
+      hasHardFail = true;
+    }
+  }
+
+  // If too many missing requirements, fail the hard gate
+  const failed = hasHardFail || missingRequirements.filter(m => m.severity === 'critical').length > 0;
+
+  return {
+    passed: !failed,
+    missingRequirements,
+    totalMissing: missingRequirements.length,
+    reason: failed ? 'Failed hard gate - missing critical requirements' : 'Passed hard gate',
+  };
+};
+
+/**
+ * Generate missing items specific to the detected field
+ */
+const generateMissingForField = (extractedData, rawText, fieldInfo) => {
+  const missing = [];
+  const textLower = (rawText || '').toLowerCase();
+
+  if (!fieldInfo) return missing;
+
+  const { evaluationCriteria = [], criticalCredential } = fieldInfo;
+
+  // Check for each evaluation criterion
+  for (const criterion of evaluationCriteria) {
+    const criterionLower = criterion.toLowerCase();
+
+    // Check if criterion is mentioned/skills present
+    const hasSkill = (extractedData.skills || []).some(s =>
+      s.toLowerCase().includes(criterionLower)
+    );
+
+    // Check if criterion appears in experience/achievements
+    const hasEvidence = textLower.includes(criterionLower);
+
+    if (!hasSkill && !hasEvidence) {
+      missing.push({
+        item: criterion,
+        type: 'evaluation_criterion',
+        whyItMatters: `${criterion} is typically expected in this field for hiring decisions`,
+      });
+    }
+  }
+
+  // Check for critical credential if applicable
+  if (criticalCredential) {
+    const hasCredential = (extractedData.certifications || []).some(c =>
+      c.toLowerCase().includes(criticalCredential.toLowerCase())
+    ) || (extractedData.education || []).some(e =>
+      e.toLowerCase().includes(criticalCredential.toLowerCase())
+    );
+
+    if (!hasCredential) {
+      missing.push({
+        item: criticalCredential,
+        type: 'credential',
+        whyItMatters: `${criticalCredential} is often a required credential for this profession`,
+      });
+    }
+  }
+
+  return missing;
 };
 
 /**
@@ -225,20 +414,34 @@ const getRecommendations = (categoryScores, missingSections, missingKeywords) =>
 };
 
 /**
- * Generate complete ATS analysis result
+ * Generate complete ATS analysis result with optional field-adaptive scoring
+ * @param {Object} extractedData - Parsed resume data
+ * @param {string} rawText - Raw resume text
+ * @param {Object} options - Optional parameters: fieldWeights, jobDescription, fieldInfo
  */
-const generateATSAnalysis = (extractedData, rawText) => {
-  const { overallScore, categoryScores } = calculateATSScore(extractedData, rawText);
+const generateATSAnalysis = (extractedData, rawText, options = {}) => {
+  const { fieldWeights, jobDescription, fieldInfo } = options;
+
+  const { overallScore, categoryScores, weightsUsed } = calculateATSScore(extractedData, rawText, fieldWeights);
   const missingSections = getMissingSections(extractedData, rawText);
   const missingKeywords = getMissingKeywords(rawText);
   const recommendations = getRecommendations(categoryScores, missingSections, missingKeywords);
 
+  // Perform hard gate check if job description provided
+  const hardGateCheck = performHardGateCheck(extractedData, rawText, jobDescription, fieldInfo);
+
+  // Generate missing items specific to the field
+  const missingForField = generateMissingForField(extractedData, rawText, fieldInfo);
+
   return {
     overallScore,
     categoryScores,
+    weightsUsed,
     missingSections,
     missingKeywords,
     recommendations,
+    hardGateCheck,
+    missingForField,
   };
 };
 
@@ -315,4 +518,7 @@ module.exports = {
   getATSScoreById,
   analyzeATSById,
   saveATSResults,
+  performHardGateCheck,
+  generateMissingForField,
+  DEFAULT_WEIGHTS,
 };
